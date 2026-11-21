@@ -1,0 +1,9 @@
+
+use #skivine::s::Term;
+
+/// Reads one term per line (prefix form) and prints each normal form.
+pub fn main(&io: &IO) {
+  while io.read_line() is Option::Some(line) {
+    io.println(Term::eval(line).prefix());
+  }
+}

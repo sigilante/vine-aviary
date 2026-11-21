@@ -1,0 +1,17 @@
+
+use #skivine::s::Term;
+
+#[configurable]
+const term: String = "```SSSS";
+
+#[configurable]
+const print: Bool = true;
+
+pub fn main(&io: &IO) {
+  let nf = Term::eval(term);
+  if print {
+    io.println(nf.prefix());
+  } else {
+    io.println("size {nf.size()}");
+  }
+}
