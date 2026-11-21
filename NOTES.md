@@ -89,3 +89,6 @@ repository.
   Remote `origin` = `sigilante/ski-vine` added; first commit local, not pushed.
 - 2026-11-21: Pushed `master` (e7625ee) to `sigilante/ski-vine` with Neal's approval.
 - 2026-11-21: `s.vi` renamed `ski.vi`; K and I finished (Neal began them). In Neal's draft I took an argument and held it (`I1`), which would make `I x y` reduce to `x`; `I x` now returns `x`. `combinators.vi` generated for 49 Aviary birds. Checks as in the table above. Neal renamed the remote to `sigilante/vine-aviary`, but GitHub still shows `sigilante/ski-vine` and no `vine-aviary`, so `origin` is unchanged for now. Committed locally, not pushed.
+- 2026-11-21: Repository renamed `sigilante/vine-aviary` (Neal); local folder now `~/Code/vine-aviary`. `d85a1bd` pushed with Neal's approval. The library folder is still `skivine/`.
+- 2026-11-21: The Y crash is reduced to 17 lines (an enum match whose arm calls the function on the same constant variant). It begins at `--opt-limit 6`; `--no-opt` avoids it. Reproduction and a draft issue, not sent: `~/Code/english-ivy/outreach/draft-issue-optimizer-self-graft/`. No matching upstream issue found in two searches.
+- 2026-11-21: All 13 S, K, I terms of size ≤ 7 that normalize leftmost-outermost but not strictly contain K, as skinock predicted from the conservation theorem for non-erasing systems.

@@ -1,4 +1,4 @@
-# ski-vine
+# vine-aviary
 
 Combinator calculi on interaction nets: S, K, I and the other combinator birds written
 in [Vine](https://github.com/VineLang/vine) and run on the IVM, checked against reference
