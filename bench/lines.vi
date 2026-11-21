@@ -1,5 +1,5 @@
 
-use #skivine::s::Term;
+use #skivine::ski::Term;
 
 /// Reads one term per line (prefix form) and prints each normal form.
 pub fn main(&io: &IO) {

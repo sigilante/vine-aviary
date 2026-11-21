@@ -2,10 +2,10 @@
 
 Append dated lines to Status; do not rewrite earlier ones.
 
-## How S is put on the IVM
+## How a combinator is put on the IVM
 
-`skivine/s.vi` does not define new agents. It is an ordinary Vine program: a three-variant
-enum for values and a function `apply` that matches on the function and forks the argument
+`skivine/ski.vi` does not define new agents. It is an ordinary Vine program: an enum of
+values (a combinator and the arguments it holds so far) and a function `apply` that matches on the function and forks the argument
 in the `S x y z` case. The Vine compiler turns that into IVM nets. The correspondence with
 the six rules of `docs/inets-pure-S.md` (application waits on the function; a duplicator
 waits on a value and copies one constructor) is the intent; it has not been checked rule by rule.
@@ -30,6 +30,37 @@ The second row shows a fixed cost of about 400 in depth and 700 in interactions 
 and reporting a small term, so the first row's IVM figures overstate the reduction itself.
 That cost has not been separated out.
 
+## Results with K, I and the other birds, 2026-11-21
+
+Same build and machine. `strict` in `ref/check.py` makes the same calls to `apply` as the
+Vine program, so it terminates exactly when the IVM should; each answer is also compared
+with the leftmost-outermost normal form.
+
+| Check | Terms run | Mismatches | Normalize leftmost-outermost but not strictly (not run) |
+|---|---|---|---|
+| `ski 7`: S, K, I, sizes ≤ 7 | 322,985 | 0 | 13, the first being `S I I (S I (S K))` |
+| `birds 3`: 49 birds, sizes ≤ 3 | 236,860 | 0 | 0 |
+| `rules`: each bird on as many inert arguments as its arity | 49 | 0 | n/a |
+| `census 9`: pure S, sizes ≤ 9 (rerun) | 1,737 | 0 | 0 |
+
+Limits of these checks: `birds 3` fires only rules of arity 1 and 2, and `rules` fires each
+rule once on inert arguments; rules of arity 3 and more are not tested in combination,
+except S. Caps: 2,000 leftmost-outermost steps, 20,000 strict calls.
+
+Three findings:
+
+1. **The IVM gives strict evaluation.** Before the strict filter was added, the size-7
+   S, K, I census ran the IVM out of memory: 13 terms there have a normal form that
+   strict evaluation never reaches, because a dropped argument diverges. Normal-order
+   behaviour needs a lazy encoding, which is not written.
+2. **Y is left out** (`tools/gen_combinators_excluded.py`). Under strict evaluation
+   `Y a` never stops. Separately, with Y in the table the Vine optimizer emits an
+   `ivm:graft[...]` node with a child (`ivm:graft[...apply#0x149](ivm:eraser)`), and the
+   IVM panics at `ivm/src/program.rs:217`; `--no-opt` avoids it. Bisected to Y alone;
+   no minimal reproduction yet, and not reported upstream.
+3. **Deriving `Fork` and `Drop` fails for the 163-variant enum** ("search limit reached
+   when finding impl of trait `Fork[Term]`"), so the generator writes both by hand.
+
 ## Not done
 
 - Terms without a normal form. The IVM runs until the net is normal, so such a term does
@@ -42,7 +73,9 @@ That cost has not been separated out.
   duplicator label, two duplicators that meet annihilate, which may be wrong for some
   terms; the census would show it.
 - Any proof. The simulation theorem belongs in lean-ski.
-- K, I, and an eraser. A licence.
+- A lazy encoding, so that normal-order behaviour (and Y) can be had.
+- Interaction, depth and breadth figures for K, I and the other birds.
+- A licence.
 
 ## Boundaries
 
@@ -54,3 +87,5 @@ repository.
 - 2026-11-21: Repository created (branch `master`). Pure S in Vine; census and large-term
   checks pass as above. Seed files copied from `~/Code/ski/notes` with skinock's agreement.
   Remote `origin` = `sigilante/ski-vine` added; first commit local, not pushed.
+- 2026-11-21: Pushed `master` (e7625ee) to `sigilante/ski-vine` with Neal's approval.
+- 2026-11-21: `s.vi` renamed `ski.vi`; K and I finished (Neal began them). In Neal's draft I took an argument and held it (`I1`), which would make `I x y` reduce to `x`; `I x` now returns `x`. `combinators.vi` generated for 49 Aviary birds. Checks as in the table above. Neal renamed the remote to `sigilante/vine-aviary`, but GitHub still shows `sigilante/ski-vine` and no `vine-aviary`, so `origin` is unchanged for now. Committed locally, not pushed.

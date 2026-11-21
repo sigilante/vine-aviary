@@ -1,5 +1,5 @@
 
-use #skivine::s::Term;
+use #skivine::ski::Term;
 
 #[configurable]
 const term: String = "```SSSS";

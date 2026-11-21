@@ -1,0 +1,10 @@
+
+use #skivine::combinators::Term;
+
+/// Reads one term per line (prefix form, bird names separated by spaces) and
+/// prints each normal form.
+pub fn main(&io: &IO) {
+  while io.read_line() is Option::Some(line) {
+    io.println(Term::eval(line).prefix());
+  }
+}
