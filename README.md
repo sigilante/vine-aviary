@@ -9,6 +9,7 @@ State: an experiment. The results are tests, not proofs.
 | Path | Holds |
 |---|---|
 | `skivine/ski.vi` | S, K, I by hand: `Term` (a combinator that still lacks arguments), `apply`, a reader and printer |
+| `skivine/lazy.vi` | S, K, I, Y by normal-order evaluation: terminates whenever a normal form exists, without sharing |
 | `skivine/combinators.vi` | 49 birds, generated: the same design for every bird in `tools/birds.py` except Y |
 | `tools/birds.py` | The bird table (name, arity, rule), transcribed from the Aviary kernel |
 | `tools/gen_combinators.py` | Writes `combinators.vi` from the table |
@@ -29,6 +30,7 @@ python3 ref/check.py census 9     # pure S; about 90 s
 python3 ref/check.py ski 7        # S, K, I; about 45 s
 python3 ref/check.py birds 3      # all 49 birds; about 6 min
 python3 ref/check.py rules        # every rule fired once
+python3 ref/check.py lazy 5       # normal order, with Y; about 1 min
 python3 ref/check.py monsters
 python3 tools/gen_combinators.py  # regenerate skivine/combinators.vi
 echo '```B S K I' | vine run bench/birds.vi --lib skivine --no-stats

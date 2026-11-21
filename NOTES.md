@@ -61,6 +61,44 @@ Three findings:
 3. **Deriving `Fork` and `Drop` fails for the 163-variant enum** ("search limit reached
    when finding impl of trait `Fork[Term]`"), so the generator writes both by hand.
 
+## Strict, lazy, and what the crash was, 2026-11-21
+
+Neal asked at which level the Y trouble sits: our definitions, our assumptions about
+evaluation order, a compiler bug, or interaction nets themselves. There are two separate
+problems, at different levels.
+
+**The crash is a compiler bug**, not ours and not a property of nets. The unoptimized net
+is well formed and runs. The optimizer's rule for a statically known enum match leaves a
+two-port graft node that can never be inlined when a stage reaches itself, and the IVM
+accepts only nilary grafts. It also hits ordinary programs: an intended infinite loop
+over a constant state, and mutual recursion that is never called. Root cause, files and
+a draft issue: `~/Code/english-ivy/outreach/draft-issue-optimizer-self-graft/`.
+
+**Non-termination is a property of the encoding, and under it of nets.** In `ski.vi` and
+`combinators.vi` an application is a function call, and on the IVM a call is an active
+pair as soon as it exists. Dropping its result attaches an eraser to the result wire, but
+an eraser acts only on a principal port, and the call does not offer one until it has
+finished. So work that is no longer wanted still runs: `K I Ω` was still running after
+4 s when stopped. That is how interaction nets reduce; laziness has to be put into the
+encoding.
+
+**A lazy encoding works, at the cost of sharing.** `skivine/lazy.vi` keeps arguments as
+inert data (`Expr`) and evaluates heads only (`whnf`). `ref/check.py lazy 5`: all 7,667
+S, K, I, Y terms of size ≤ 5 with a leftmost-outermost normal form (caps: 200 steps, size
+2,000) give that normal form; 3,794 of them contain Y. `K I Ω` gives `I`. But copying an
+argument copies the unevaluated term, so this is call by name. On the 3,066-leaf term,
+with the whole normal form printed: strict 149,413 interactions, lazy 331,163 (both
+figures include printing, which also sets the depth, about 84,000 in each).
+
+| | Terminates whenever a normal form exists | Shares work | Y |
+|---|---|---|---|
+| `ski.vi`, `combinators.vi` (strict) | no | yes | never stops |
+| `lazy.vi` (call by name) | yes, on the terms tested | no | works |
+| call by need | wanted | wanted | not written |
+
+Call by need on nets is a known problem with known answers (token-passing nets; from
+memory, Sinot's papers of 2005–2006, not checked). It is the open design question here.
+
 ## Not done
 
 - Terms without a normal form. The IVM runs until the net is normal, so such a term does
@@ -92,3 +130,4 @@ repository.
 - 2026-11-21: Repository renamed `sigilante/vine-aviary` (Neal); local folder now `~/Code/vine-aviary`. `d85a1bd` pushed with Neal's approval. The library folder is still `skivine/`.
 - 2026-11-21: The Y crash is reduced to 17 lines (an enum match whose arm calls the function on the same constant variant). It begins at `--opt-limit 6`; `--no-opt` avoids it. Reproduction and a draft issue, not sent: `~/Code/english-ivy/outreach/draft-issue-optimizer-self-graft/`. No matching upstream issue found in two searches.
 - 2026-11-21: All 13 S, K, I terms of size ≤ 7 that normalize leftmost-outermost but not strictly contain K, as skinock predicted from the conservation theorem for non-erasing systems.
+- 2026-11-21: Crash traced to the optimizer's enum-match rule (see the section above); `lazy.vi` added and checked. Committed locally, not pushed.

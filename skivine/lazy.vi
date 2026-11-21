@@ -1,0 +1,112 @@
+
+/// S, K, I and Y by normal-order (call-by-name) evaluation.
+///
+/// An `Expr` is an unevaluated term: inert data that can be copied or dropped
+/// without doing any work. `whnf` evaluates only the head of a term, and `Val`
+/// is what it returns: a combinator that still lacks arguments, holding the
+/// arguments it has as unevaluated terms. Copying an argument copies the
+/// unevaluated term, so work is repeated, not shared.
+
+pub enum* Expr {
+  S(),
+  K(),
+  I(),
+  Y(),
+  App(Expr, Expr),
+}
+
+pub enum* Val {
+  S0(),
+  S1(Expr),
+  S2(Expr, Expr),
+  K0(),
+  K1(Expr),
+  I0(),
+  Y0(),
+}
+
+pub mod Expr {
+  /// Reads a term in prefix form: `S`, `K`, `I`, `Y` are the atoms and a
+  /// backtick applies the next two terms. Anything else reads as `I`.
+  pub fn parse(src: String) -> Expr {
+    let chars = src as List[Char];
+    parse_from(&chars)
+  }
+
+  fn parse_from(&chars: &List[Char]) -> Expr {
+    let c = chars.pop_front().or_use('I');
+    when {
+      c == '`' {
+        let f = parse_from(&chars);
+        let x = parse_from(&chars);
+        Expr::App(f, x)
+      }
+      c == 'S' { Expr::S() }
+      c == 'K' { Expr::K() }
+      c == 'Y' { Expr::Y() }
+      _ { Expr::I() }
+    }
+  }
+
+  /// The weak head normal form.
+  pub fn .whnf(self: Expr) -> Val {
+    match self {
+      Expr::S() { Val::S0() }
+      Expr::K() { Val::K0() }
+      Expr::I() { Val::I0() }
+      Expr::Y() { Val::Y0() }
+      Expr::App(f, x) { f.whnf().apply(x) }
+    }
+  }
+
+  /// The normal form, in prefix form.
+  pub fn .normalize(self: Expr) -> String {
+    let out = [];
+    self.whnf().write(&out);
+    out as String
+  }
+}
+
+pub mod Val {
+  pub fn .apply(self: Val, x: Expr) -> Val {
+    match self {
+      Val::S0() { Val::S1(x) }
+      Val::S1(a) { Val::S2(a, x) }
+      Val::S2(a, b) { Expr::App(a, x).whnf().apply(Expr::App(b, x)) }
+      Val::K0() { Val::K1(x) }
+      Val::K1(a) { a.whnf() }
+      Val::I0() { x.whnf() }
+      Val::Y0() { x.whnf().apply(Expr::App(Expr::Y(), x)) }
+    }
+  }
+
+  pub fn .write(self: Val, &out: &List[Char]) {
+    match self {
+      Val::S0() {
+        out.push_back('S');
+      }
+      Val::S1(x) {
+        out ++= ['`', 'S'];
+        x.whnf().write(&out);
+      }
+      Val::S2(x, y) {
+        out ++= ['`', '`', 'S'];
+        x.whnf().write(&out);
+        y.whnf().write(&out);
+      }
+      Val::K0() {
+        out.push_back('K');
+      }
+      Val::K1(x) {
+        out ++= ['`', 'K'];
+        x.whnf().write(&out);
+      }
+      Val::I0() {
+        out.push_back('I');
+      }
+      Val::Y0() {
+        out.push_back('Y');
+      }
+    }
+  }
+}

@@ -4,6 +4,9 @@
   check.py census [N]   pure S, sizes <= N (default 9), with skivine/ski.vi
   check.py ski [N]      S, K, I, sizes <= N (default 7), with skivine/ski.vi
   check.py birds [N]    all birds, sizes <= N (default 3), with skivine/combinators.vi
+  check.py lazy [N]     S, K, I, Y, sizes <= N (default 5), with skivine/lazy.vi, which
+                        evaluates in normal order: every term with a leftmost-
+                        outermost normal form is run, and Y is included
   check.py rules        each bird applied to as many distinct inert arguments as its
                         arity, so that its rule fires once (the census at size 3
                         fires only rules of arity 1 and 2)
@@ -181,6 +184,25 @@ def census(label, atoms, n_max, program, spaced):
     return 1 if bad or disagree or len(got) != len(cases) else 0
 
 
+def lazy(n_max):
+    RULES["Y"] = (1, parse_rule("a (Y a)"))
+    cases, memo = [], {}
+    for n in range(1, n_max + 1):
+        for t in terms(["S", "K", "I", "Y"], n, memo):
+            nf = lo_normal_form(t, cap=200, max_size=2000)  # smaller caps: Y terms grow fast
+            if nf is not None:
+                cases.append((t, nf))
+    out = vine("lazy_lines", "--no-stats", stdin="".join(prefix(t, False) + "\n" for t, _ in cases))
+    got = out.split("\n")[: len(cases)]
+    bad = [(t, g) for (t, v), g in zip(cases, got) if g != prefix(v, False)]
+    for t, g in bad[:10]:
+        print("MISMATCH", prefix(t, False), "->", g)
+    with_y = sum("Y" in prefix(t, False) for t, _ in cases)
+    print(f"S, K, I, Y terms, sizes <= {n_max}, normal order: {len(cases)} terms run "
+          f"({with_y} contain Y), {len(got)} answers, {len(bad)} mismatches")
+    return 1 if bad or len(got) != len(cases) else 0
+
+
 def rules():
     """Each bird on distinct arguments `Ê x`, which stay inert: no rule gives one of
     its formals more than five further arguments, and Ê needs seven."""
@@ -232,6 +254,8 @@ if __name__ == "__main__":
         sys.exit(census("S, K, I terms", ["S", "K", "I"], n or 7, "lines", False))
     if mode == "birds":
         sys.exit(census(f"{len(RULES)} birds", sorted(RULES), n or 3, "birds", True))
+    if mode == "lazy":
+        sys.exit(lazy(n or 5))
     if mode == "rules":
         sys.exit(rules())
     sys.exit(monsters())
