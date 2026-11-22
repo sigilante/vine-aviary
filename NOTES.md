@@ -64,7 +64,7 @@ Three findings:
    budget of 2,000 steps (`STEPS_LIMIT`), and an enum costs about 10 steps per variant plus
    about 10 per field. The most that compiles is 199 variants with no fields, 66 with two
    fields each, 39 with four. With the constant raised, enums of 1,600 variants compile.
-   Draft report: `~/Code/english-ivy/outreach/draft-issue-derive-search-limit/`.
+   Draft report: `~/Code/english-ivy/outreach/issues/derive-search-limit.md`.
 
 ## Strict, lazy, and what the crash was, 2026-11-21
 
@@ -75,9 +75,14 @@ problems, at different levels.
 **The crash is a compiler bug**, not ours and not a property of nets. The unoptimized net
 is well formed and runs. The optimizer's rule for a statically known enum match leaves a
 two-port graft node that can never be inlined when a stage reaches itself, and the IVM
-accepts only nilary grafts. It also hits ordinary programs: an intended infinite loop
-over a constant state, and mutual recursion that is never called. Root cause, files and
-a draft issue: `~/Code/english-ivy/outreach/draft-issue-optimizer-self-graft/`.
+accepts only nilary grafts. It also hits programs that never enter the recursion, such as
+mutual recursion that is never called. Root cause and the issue text:
+`~/Code/english-ivy/outreach/issues/optimizer-self-graft.md`.
+
+Correction, 2026-11-22: an earlier version of this note listed "an intended infinite loop
+over a constant state" as a program the crash breaks. That example does not run without
+optimization either: its unconditional recursion unfolds without end and exhausts the heap
+before anything is printed. It was dropped from the report.
 
 **Non-termination is a property of the encoding, and under it of nets.** In `ski.vi` and
 `combinators.vi` an application is a function call, and on the IVM a call is an active
@@ -136,3 +141,4 @@ repository.
 - 2026-11-21: The Y crash is reduced to 17 lines (an enum match whose arm calls the function on the same constant variant). It begins at `--opt-limit 6`; `--no-opt` avoids it. Reproduction and a draft issue, not sent: `~/Code/english-ivy/outreach/draft-issue-optimizer-self-graft/`. No matching upstream issue found in two searches.
 - 2026-11-21: All 13 S, K, I terms of size ≤ 7 that normalize leftmost-outermost but not strictly contain K, as skinock predicted from the conservation theorem for non-erasing systems.
 - 2026-11-21: Crash traced to the optimizer's enum-match rule (see the section above); `lazy.vi` added and checked. Committed locally, not pushed.
+- 2026-11-22: Corrected the note on the optimizer crash (the infinite-loop example was wrong); issue texts moved to `~/Code/english-ivy/outreach/issues/`.
