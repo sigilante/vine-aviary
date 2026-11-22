@@ -60,6 +60,11 @@ Three findings:
    no minimal reproduction yet, and not reported upstream.
 3. **Deriving `Fork` and `Drop` fails for the 163-variant enum** ("search limit reached
    when finding impl of trait `Fork[Term]`"), so the generator writes both by hand.
+   Explained on 2026-11-22: the compiler resolves the derive by a search with a fixed
+   budget of 2,000 steps (`STEPS_LIMIT`), and an enum costs about 10 steps per variant plus
+   about 10 per field. The most that compiles is 199 variants with no fields, 66 with two
+   fields each, 39 with four. With the constant raised, enums of 1,600 variants compile.
+   Draft report: `~/Code/english-ivy/outreach/draft-issue-derive-search-limit/`.
 
 ## Strict, lazy, and what the crash was, 2026-11-21
 
