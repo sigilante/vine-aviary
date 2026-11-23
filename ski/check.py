@@ -5,13 +5,16 @@
     check.py census [N]       every term of S, K, I up to size N (default 6)
     check.py atoms [N]        the same with two atoms among the leaves (default 5)
     check.py cases            a few named terms
-    check.py all              the three above with their defaults
+    check.py all              table, census, atoms and cases, with their defaults
 
 In the census, for every term with a leftmost-outermost normal form (tree reduction,
 within caps) reduction by need must stop and give that normal form. Reduction of every
 pair at once must give it too whenever it stops within its caps. Where the reference
 reducer `aviary_kernel` is installed, its number of contractions is compared with the
-number of `contract` rules applied by need.
+number of `contract` rules applied by need (without it that line is not printed). By need
+must never take more contractions than the reference or than tree reduction; taking fewer
+is reported, not refused. `cases` checks the counts of single rules exactly, which is what
+would catch a rule counted under the wrong name.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -141,6 +144,9 @@ def census(label, leaves, n_max):
                     same += need == contractions
                     fewer += need < contractions
                     more += need > contractions
+            if need > steps:
+                wrong += 1
+                print("MORE CONTRACTIONS THAN TREE STEPS:", show(t))
             if steps - need > worst[0] - worst[1]:
                 worst = (steps, need, t)
             net = Net.of(t, agents, rules)
@@ -185,6 +191,27 @@ def cases():
         ok = got == want
         bad |= not ok
         print(f"{name}: {text} -> {got} ({'as expected' if ok else 'EXPECTED ' + want}); {net.fired} interactions, {net.counts.get('contract', 0)} contractions")
+    # One rule at a time: what each is counted as.
+    for text, want in (("`I0", {"contract": 1}), ("``K01", {"collect": 1, "contract": 1}),
+                       ("```S012", {"collect": 4, "contract": 1}), ("`01", {"collect": 1})):
+        net = Net.of(parse(text), agents, rules)
+        net.head()
+        got = {k: v for k, v in net.counts.items() if k in ("collect", "contract")}
+        if got != want:
+            bad = 1
+            print(f"COUNTS: {text} gives {got}, expected {want}")
+    print("the counts of single rules are as expected" if not bad else "see above")
+    # Sweeping after every interaction must change no answer and no contraction count.
+    for text in ("```SII```SKK```SKK0", "``KI" + omega, "```S``SKK``SKK```SII0", "````SSS`IS0"):
+        runs = []
+        for always in (False, True):
+            net = Net.of(parse(text), agents, rules)
+            net.sweep_always = always
+            net.normalize()
+            runs.append((show(net.read()), net.counts.get("contract", 0)))
+        if runs[0] != runs[1]:
+            bad = 1
+            print(f"SWEEPING CHANGED {text}: {runs}")
     net = Net.of(parse("``KI" + omega), agents, rules)
     try:
         net.run_all(20000, 50000)

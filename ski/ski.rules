@@ -27,8 +27,8 @@ agent era   -              # eraser: (term)
 #   count contract | collect | copy | erase
 #
 # A contraction of the calculus (I x -> x, K x y -> x, S x y z -> x z (y z)) is exactly one
-# application of a rule counted `contract`. `collect` is a combinator taking an argument
-# it cannot yet act on.
+# application of a rule counted `contract`. `collect` is a value taking an argument it
+# cannot yet act on (a combinator short of arguments, an atom, or a stuck term).
 
 # --- application --------------------------------------------------------------------------
 

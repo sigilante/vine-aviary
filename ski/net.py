@@ -2,6 +2,10 @@
 """A net machine for an interaction system given as a table (table.py), with two
 schedules, and terms of S, K, I and atoms read into and out of nets.
 
+    net.py [--all] TERM      reduce TERM by need, or with --all every pair at once
+
+TERM is in prefix form: a backtick applies the next two terms; S, K, I; a digit is an atom.
+
 A term is "S", "K", "I", an int (an atom), or a pair (function, argument).
 
 Schedules:
@@ -11,8 +15,10 @@ Schedules:
   is fired only when the cursor is waiting on it. An application is fired when its result
   is asked for and its function has become a value; a duplicator, when one of its copies is
   asked for and its term has become a value, so a shared term is evaluated once. When the
-  root is a value, its arguments are asked for from left to right. Erasers are never asked,
-  and what they would erase is left where it is.
+  root is a value, its arguments are asked for from left to right. Erasers are never asked;
+  what they would erase is left where it is until a sweep removes it (`Net.sweep`, which
+  is housekeeping and not a rule). The number of contractions does not depend on when
+  sweeps happen; the numbers of copies and of interactions in all do.
 
 The rules are the table's; nothing here knows what S does.
 """
@@ -38,9 +44,14 @@ class Net:
         self.counts = {}
         self.used = {}
         self.fired = 0
-        self.most = 0          # most nodes at once
-        self.collect_at = 20000  # reduction by need collects when the net passes this size
-        self.collected = 0
+        self.most = 0             # most nodes at once
+        # Reduction by need sweeps (`sweep`) when the net passes `sweep_at` nodes, and then
+        # sets `sweep_at` to twice what is left, or `sweep_floor` if that is more. With
+        # `sweep_always` it sweeps after every interaction (for tests).
+        self.sweep_floor = 20000
+        self.sweep_at = self.sweep_floor
+        self.sweep_always = False
+        self.sweeps = 0
 
     # --- building ---------------------------------------------------------------------
 
@@ -154,9 +165,9 @@ class Net:
                 self.fire(n, f[0])
                 if self.fired > max_fired:
                     raise Stop
-                if len(self.kind) > self.collect_at:
-                    self.collect()
-                    self.collect_at = max(2 * len(self.kind), 20000)
+                if self.sweep_always or len(self.kind) > min(self.sweep_at, max_nodes):
+                    self.sweep()
+                    self.sweep_at = max(2 * len(self.kind), self.sweep_floor)
                     if len(self.kind) > max_nodes:
                         raise Stop
                     stack = [port]
@@ -164,7 +175,7 @@ class Net:
                 stack.append((n, 0))
         return self.link[port][0]
 
-    def collect(self):
+    def sweep(self):
         """Housekeeping for reduction by need, not a rule of the system: removes every
         node the root cannot reach. Reduction by need never fires an eraser, so what an
         eraser holds stays until this removes it. A duplicator one of whose copies is
@@ -197,7 +208,7 @@ class Net:
             self.link.pop((n, dead), None)
             del self.kind[n]
             self.wire(source, other)
-        self.collected += 1
+        self.sweeps += 1
 
     def normalize(self, max_fired=200000, max_nodes=200000):
         """By need, to normal form: the root's value, then its arguments from the left."""
@@ -260,20 +271,29 @@ class Net:
 
 def parse(text):
     """Prefix form: a backtick applies the next two terms; S, K, I; a digit is an atom."""
-    pos = 0
-
-    def term():
-        nonlocal pos
-        while text[pos].isspace():
-            pos += 1
-        ch = text[pos]
-        pos += 1
+    stack = []  # one entry for each open application: the terms it has so far
+    done = None
+    for ch in text:
+        if ch.isspace():
+            continue
+        if done is not None:
+            raise ValueError("text after the end of the term")
         if ch == "`":
-            f = term()
-            return (f, term())
-        return int(ch) if ch.isdigit() else ch
-
-    return term()
+            stack.append([])
+            continue
+        if ch not in "SKI" and not ch.isdigit():
+            raise ValueError("not a term: " + ch)
+        t = int(ch) if ch.isdigit() else ch
+        while stack:
+            stack[-1].append(t)
+            if len(stack[-1]) < 2:
+                break
+            t = tuple(stack.pop())
+        else:
+            done = (t,)
+    if done is None:
+        raise ValueError("the term is not complete")
+    return done[0]
 
 
 def show(t):

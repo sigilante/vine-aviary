@@ -15,7 +15,7 @@ State: an experiment. The results are tests, not proofs.
 | `tools/gen_combinators.py` | Writes `combinators.vi` from the table |
 | `tools/check_table.py` | Compares the table with an installed `aviary_kernel` |
 | `bench/` | `normalize.vi` (one S, K, I term, with statistics), `lines.vi` and `birds.vi` (one term per input line) |
-| `ref/check.py` | The checks: `census`, `ski`, `birds`, `rules`, `monsters` |
+| `ref/check.py` | The checks for the Vine programs: `census`, `ski`, `birds`, `rules`, `monsters` |
 | `ref/snet.py`, `census.py`, `extra.py` | The Python net simulator for pure S and its census, copied from the SKI research notes |
 | `docs/inets-pure-S.md` | The note that defines the six-rule system (a copy, dated 2026-11-21) |
 | `ski/`, `docs/ski-system.md` | The `ski:` interaction system: S, K, I as agents, declared as a table of 24 typed rules, with a machine that reduces all at once or by need, checked against tree reduction and against programs compiled by SKIjack |
@@ -35,6 +35,15 @@ python3 ref/check.py lazy 5       # normal order, with Y; about 1 min
 python3 ref/check.py monsters
 python3 tools/gen_combinators.py  # regenerate skivine/combinators.vi
 echo '```B S K I' | vine run bench/birds.vi --lib skivine --no-stats
+```
+
+The `ski:` system's checks need only Python 3 (and, for the last, the `skijack` and
+`aviary_kernel` packages):
+
+```sh
+python3 ski/table.py                  # the table and its typing
+python3 ski/check.py all              # about 10 s; `census 7` takes a minute
+python3 ski/skijack_check.py t0 t1    # t2 adds six and a half minutes and several GB
 ```
 
 Terms are in prefix form: a backtick applies the next two terms. `ski.vi` reads the

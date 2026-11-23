@@ -2,12 +2,12 @@
 """Programs compiled by SKIjack, run on the ski: system by need and compared with
 SKIjack's reference reducer.
 
-    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1; t2 takes about 6 minutes and
-                                          several GB of memory: 8.6 million nodes at once)
+    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1; t2 takes about six and a half
+                                          minutes and several GB of memory)
 
 Needs the `skijack` and `aviary_kernel` packages. The programs are the level-1
 declarations of `tower` in SKIjack's corpus: an interpreter written in S, K, I run on a
-quoted program (t0), and on a quoted interpreter running a quoted program (t1, t2).
+quoted program (t0), on the quoted unquoter (t1) and on the quoted interpreter itself (t2).
 
 For each program:
 - it is reduced by need until its root is a value, and the contractions are counted
