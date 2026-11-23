@@ -1,0 +1,133 @@
+# The ski: interaction system: S, K and I as agents of their own.
+#
+# agent NAME PRINCIPAL AUXILIARY... [param P]
+#   Each port is an output (+) or an input (-). A wire joins one output to one input.
+#   A term's output is the principal port of its head value, or the result port of an
+#   application, or a copy port of a duplicator. Every input port waits for a term.
+
+# Values: the principal port is the value's output; the others hold its arguments.
+agent S     +
+agent K     +
+agent I     +
+agent K1    + -            # K x
+agent S1    + -            # S x
+agent S2    + - -          # S x y
+agent atom  +  param k     # an inert constant, numbered k: stands for an unknown
+agent stuck + - -          # a term whose head is an atom, applied: stuck(head argument)
+
+# Consumers: the principal port is an input, and waits for a value.
+agent app   - - +          # application: (function) (argument result)
+agent dup   - + +          # duplicator: (term) (copy copy)
+agent era   -              # eraser: (term)
+
+# rule CONSUMER >< VALUE
+#   => equations between ports, separated by ";". A letter bound on the left is that
+#      port; any other letter is a new wire and occurs exactly twice; `agent (x y)` is a
+#      new node and stands for its principal port. `nothing`: the pair vanishes.
+#   count contract | collect | copy | erase
+#
+# A contraction of the calculus (I x -> x, K x y -> x, S x y z -> x z (y z)) is exactly one
+# application of a rule counted `contract`. `collect` is a combinator taking an argument
+# it cannot yet act on.
+
+# --- application --------------------------------------------------------------------------
+
+rule app (x r) >< I
+  => r = x
+  count contract
+
+rule app (x r) >< K
+  => r = K1 (x)
+  count collect
+
+rule app (y r) >< K1 (x)
+  => r = x; y = era
+  count contract
+
+rule app (x r) >< S
+  => r = S1 (x)
+  count collect
+
+rule app (y r) >< S1 (x)
+  => r = S2 (x y)
+  count collect
+
+rule app (z r) >< S2 (x y)
+  => z = dup (p q); x = app (p f); y = app (q g); f = app (g r)
+  count contract
+
+rule app (x r) >< atom k
+  => r = stuck (atom k x)
+  count collect
+
+rule app (x r) >< stuck (h a)
+  => r = stuck (stuck (h a) x)
+  count collect
+
+# --- duplication: one node at a time, its arguments left shared ---------------------------
+
+rule dup (p q) >< S
+  => p = S; q = S
+  count copy
+
+rule dup (p q) >< K
+  => p = K; q = K
+  count copy
+
+rule dup (p q) >< I
+  => p = I; q = I
+  count copy
+
+rule dup (p q) >< K1 (x)
+  => p = K1 (a); q = K1 (b); x = dup (a b)
+  count copy
+
+rule dup (p q) >< S1 (x)
+  => p = S1 (a); q = S1 (b); x = dup (a b)
+  count copy
+
+rule dup (p q) >< S2 (x y)
+  => p = S2 (a c); q = S2 (b d); x = dup (a b); y = dup (c d)
+  count copy
+
+rule dup (p q) >< atom k
+  => p = atom k; q = atom k
+  count copy
+
+rule dup (p q) >< stuck (h x)
+  => p = stuck (a c); q = stuck (b d); h = dup (a b); x = dup (c d)
+  count copy
+
+# --- erasure ------------------------------------------------------------------------------
+
+rule era >< S
+  => nothing
+  count erase
+
+rule era >< K
+  => nothing
+  count erase
+
+rule era >< I
+  => nothing
+  count erase
+
+rule era >< K1 (x)
+  => x = era
+  count erase
+
+rule era >< S1 (x)
+  => x = era
+  count erase
+
+rule era >< S2 (x y)
+  => x = era; y = era
+  count erase
+
+rule era >< atom k
+  => nothing
+  count erase
+
+rule era >< stuck (h x)
+  => h = era; x = era
+  count erase

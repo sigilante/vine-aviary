@@ -18,6 +18,7 @@ State: an experiment. The results are tests, not proofs.
 | `ref/check.py` | The checks: `census`, `ski`, `birds`, `rules`, `monsters` |
 | `ref/snet.py`, `census.py`, `extra.py` | The Python net simulator for pure S and its census, copied from the SKI research notes |
 | `docs/inets-pure-S.md` | The note that defines the six-rule system (a copy, dated 2026-11-21) |
+| `ski/`, `docs/ski-system.md` | The `ski:` interaction system: S, K, I as agents, declared as a table of 24 typed rules, with a machine that reduces all at once or by need, checked against tree reduction and against programs compiled by SKIjack |
 | `NOTES.md` | Results, limits, status log |
 
 ## Run
