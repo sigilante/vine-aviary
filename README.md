@@ -23,7 +23,8 @@ State: an experiment. The results are tests, not proofs.
 
 ## Run
 
-Needs a `vine` binary built from VineLang/vine (tested at commit `cf0c325`) and Python 3.
+The Vine programs' checks need a `vine` binary built from VineLang/vine (tested at commit
+`cf0c325`) and Python 3.
 
 ```sh
 export VINE=/path/to/vine
@@ -42,7 +43,7 @@ The `ski:` system's checks need only Python 3 (and, for the last, the `skijack` 
 
 ```sh
 python3 ski/table.py                  # the table and its typing
-python3 ski/check.py all              # about 10 s; `census 7` takes a minute
+python3 ski/check.py all              # about 5 s; `census 7` takes a minute
 python3 ski/skijack_check.py t0 t1    # t2 adds six and a half minutes and several GB
 ```
 
