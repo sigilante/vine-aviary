@@ -5,20 +5,32 @@ with a machine that reduces by need. It extends the six-rule system for pure S
 (`inets-pure-S.md`) with K, I, an eraser and inert atoms, and supplies the call-by-need
 evaluation that `NOTES.md` lists as wanted.
 
-Since 2026-11-24 (later the same day) the machine is the `inets` package, which was made
-from `table.py`, `net.py` and `names.py`; those three files are gone. Below, `run_all` is
-now `reduce_in_rounds`, `normalize` and `head` are `reduce_by_need` (deep or not), and
-`names.py` is `inets.ski.name_subterms` (which names every normal application; the old
-minimum of 2 leaves excluded nothing, since an application has at least 2), and
-`Net.sweep` is `inets.Net.sweep` with `collapse=("dup",)`. Rerun with the package, the output of each kept
-check is the same as before, line for line, counts included: `check.py all`, `census 7`
-and `demand 7`; `skijack_check.py t0 t1`; and `ivm_check.py 5` with and without
-`--names` and `--demand`, and `--skijack t0`; and `ref/graph_check.py census 6` and
-`skijack t0 t1`, which compare the graph reducer with it. The package had to learn one thing for
-this: removing a duplicator that has lost a copy (`collapse`), without which the copies
-by need on t1 are 23,475,006 rather than 2,030,766. Not rerun: t2, and the figures this
-note marks as runs by hand. The checks now take about twice as long, and t1 by need about
-five times as long, since the package is a general machine.
+Later on 2026-11-24 the machine became the `inets` package, built from `table.py`,
+`net.py` and `names.py`. Those three files are gone. The names in this note map as
+follows:
+
+| Here | In `inets` |
+|---|---|
+| `run_all` | `Net.reduce_in_rounds` |
+| `normalize`, `head` | `Net.reduce_by_need` (deep or not) |
+| `names.py` | `inets.ski.name_subterms`, which names every normal application (the old minimum of 2 leaves excluded nothing, since an application has at least 2) |
+| `Net.sweep` | `inets.Net.sweep` with `collapse=("dup",)` |
+
+Each kept check, rerun with the package, prints the same output as before, line for
+line, counts included:
+
+- `check.py all`, `check.py census 7` and `check.py demand 7`;
+- `skijack_check.py t0 t1`;
+- `ivm_check.py 5`, with and without `--names` and `--demand`, and `ivm_check.py
+  --skijack t0`;
+- `ref/graph_check.py census 6` and `ref/graph_check.py skijack t0 t1`, which compare the
+  graph reducer with the machine.
+
+The package needed one addition, `collapse`, which removes a duplicator that has lost a
+copy. Without it, the copies by need on t1 are 23,475,006, not 2,030,766. Not rerun: t2,
+and the figures this note marks as runs by hand. The censuses take about twice as long as
+before, and t1 by need about three times as long (41 s against 15 s), because the package
+is a general machine.
 
 | File | Holds |
 |---|---|
@@ -70,8 +82,8 @@ changes no answer and is caught by nothing.
 (A third way, `lazy.rules` with every pair fired, is a second system and has its own
 section below.)
 
-- **All at once** (`run_all`): every active pair, in rounds. This is the IVM's way.
-- **By need** (`normalize`, `head`): a cursor starts at the root and fires a pair only
+- **All at once** (`run_all`, now `Net.reduce_in_rounds`): every active pair, in rounds. This is the IVM's way.
+- **By need** (`normalize`, `head`, now `Net.reduce_by_need`): a cursor starts at the root and fires a pair only
   when it is waiting on it. An application fires when its result is asked for; a
   duplicator, when one of its copies is asked for, so a shared term is evaluated once.
   The cursor lives in the reducer, not in the net: the rules are the same.
@@ -86,7 +98,7 @@ reviewer's run, not kept) and on the terms in `check.py cases`.
 
 ## Results
 
-`python3 ski/check.py all`, and `check.py census 7` (a minute or two):
+`python3 ski/check.py all` (under a minute), and `check.py census 7` (a few minutes):
 
 | Terms | With a normal form | By need | All at once |
 |---|---|---|---|
@@ -311,7 +323,7 @@ that is evaluated on the first demand from either of two holders.
 - A reviewer ran some 8,000 more terms on the IVM (random, of sizes 6 to 30, and built to
   duplicate what is already shared), named and unnamed, with no wrong answer; those runs
   are not kept.
-- The machine is a reference in Python (t1's two million interactions take about ten
-  seconds), and its sweeping of unreachable nodes is its own business, not part of the
+- The machine is a reference in Python (t1's two million interactions took about ten
+  seconds on the old machine, and take about forty with `inets`), and its sweeping of unreachable nodes is its own business, not part of the
   system. Reducing all at once rescans every node each round and is slow on long terms.
 - Reading a result unfolds all sharing.

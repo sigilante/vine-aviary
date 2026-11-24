@@ -49,15 +49,16 @@ stopped: normal; 18 interactions, 9 rounds, widest 4; 0 active pairs left; arriv
 I
 ```
 
-The last line of each output is the result, on standard output; why the run stopped and
+The last line of each output is the result (`` `00 `` is the atom 0 applied to itself),
+or `stopped at the cap` if there is none, on standard output; why the run stopped and
 what it counted go to standard error. `contract` counts contractions, the steps of the calculus (`I x → x`, `K x y → x`,
 `S x y z → x z (y z)`). The other counts are work that a net does and a term rewriter does
 not.
 
 The last three commands reduce one term, $K\,I\,\Omega$, in three ways. Firing only the
-pairs the result needs gives `I`. Firing every pair never stops, because $\Omega$ runs
-although $K$ is about to discard it. Firing every pair with the demand carried inside the
-net gives `I` again.
+pairs the result needs gives `I`. Firing every pair of `ski.rules` never stops, because
+$\Omega$ runs although $K$ is about to discard it. Firing every pair of `lazy.rules`, which
+carries the demand inside the net, gives `I` again.
 
 ## The system
 
@@ -257,11 +258,11 @@ Each script's opening lines say what it compares.
 
 - The evidence is tests, on small terms and three programs. There is no simulation theorem;
   the typing argument and the argument about sharing are on paper.
-- The machine (`inets`) is a reference in Python, not a tool, and a general one: on t1 it
-  is four to five times slower than the machine written for this table that it replaced
-  (about 55 s against 10 s for one run by need). t2 took about six and a half minutes and
-  several GB on that machine and has not been run with `inets`; expect half an hour or
-  more.
+- The machine (`inets`) is a general reference implementation in Python, not a tool. On
+  t1 it is about three times slower than the machine written for this table that it
+  replaced (41 s against 15 s for one run by need, both timed on one machine on
+  2026-11-25). t2 took about six and a half minutes and several GB of memory on the old
+  machine and has not been run with `inets`; expect twenty minutes or more.
 - By need never fires an eraser, so the machine sweeps away what the root cannot reach.
   That is housekeeping, not a rule. It changes the count of copies, never the count of
   contractions or the answer.

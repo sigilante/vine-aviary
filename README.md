@@ -16,7 +16,7 @@ State: an experiment. The results are tests, not proofs.
 | `tools/gen_combinators.py` | Writes `combinators.vi` from the table |
 | `tools/check_table.py` | Compares the table with an installed `aviary_kernel` |
 | `bench/` | `normalize.vi` (one S, K, I term, with statistics), `lines.vi` and `birds.vi` (one term per input line) |
-| `ref/check.py` | The checks for the Vine programs: `census`, `ski`, `birds`, `rules`, `monsters` |
+| `ref/check.py` | The checks for the Vine programs: `census`, `ski`, `birds`, `rules`, `monsters`, `lazy` |
 | `ref/snet.py`, `census.py`, `extra.py` | The Python net simulator for pure S and its census, copied from the SKI research notes |
 | `docs/inets-pure-S.md` | The note that defines the six-rule system (a copy, dated 2026-11-21) |
 | `ski/` | The `ski:` interaction system: S, K and I as agents, declared as tables of typed rules, run by the [`inets`](https://github.com/sigilante/inets) package all at once or by need, a lowering to the IVM's own agents, and checks against SKIjack's programs. Start at [`ski/README.md`](ski/README.md); the full account is `docs/ski-system.md` |

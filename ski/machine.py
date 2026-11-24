@@ -18,6 +18,11 @@ from dataclasses import dataclass
 
 import inets
 from inets import ski
+from inets.errors import TermError
+
+if tuple(int(x) for x in inets.__version__.split(".")[:3]) < (0, 1, 2):
+    raise ImportError(f"ski/machine.py needs inets 0.1.2 or later (for duplicator collapse); "
+                      f"this is inets {inets.__version__}: pip install 'inets>=0.1.2'")
 from inets.ski import Ref, parse, show, unfold, is_normal, name_subterms, ARITY, PARTIAL  # noqa: F401
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +64,7 @@ def run(term, schedule="need", definitions=None, direct=False, deep=True, sweep_
         max_interactions=10 ** 6):
     """As `inets.ski.run`, with the tables here and a `Net` that keeps the tallies above."""
     if schedule not in ("need", "rounds", "lazy"):
-        raise ValueError('schedule is "need", "rounds" or "lazy"')
+        raise TermError('schedule is "need", "rounds" or "lazy"')
     if isinstance(term, str):
         term = parse(term)
     definitions = definitions or {}
@@ -67,7 +72,7 @@ def run(term, schedule="need", definitions=None, direct=False, deep=True, sweep_
     if not lazy:
         for k, t in definitions.items():
             if not is_normal(t):
-                raise ValueError(f"the term named {k} is not in normal form: with ski.rules only normal forms may be named")
+                raise TermError(f"the term named {k} is not in normal form: with ski.rules only normal forms may be named")
     host = inets.Library({k: (lambda net, t=t: ski.encode(net, t, direct)) for k, t in definitions.items()})
     net = Net(system(lazy), host)
     root = net.free()
