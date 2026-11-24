@@ -34,8 +34,8 @@ and print the same output, counts included; the other checks above have not been
 The package needed one addition, duplicator collapse, which removes a duplicator that has
 lost a copy (since inets 0.1.3 a table declares which agents are duplicators). Without it, the copies by need on t1 are 23,475,006, not 2,030,766. Not rerun: t2,
 and the figures this note marks as runs by hand. The censuses take about twice as long as
-before, and t1 by need about five times as long (55 and 56 s against 12 and 10 s with inets
-0.1.3, in runs alternated on one loaded machine on 2026-11-25), because the package is a
+before, and t1 by need about five times as long (55 and 56 s with inets 0.1.3 against 12 and 10 s with the
+old machine, in runs alternated on one loaded machine on 2026-11-25), because the package is a
 general machine.
 
 | File | Holds |
