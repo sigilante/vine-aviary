@@ -20,7 +20,9 @@ import inets
 from inets import ski
 from inets.errors import TermError
 
-if tuple(int(re.match(r"\d*", x).group() or 0) for x in inets.__version__.split(".")[:3]) < (0, 1, 3):
+_NUMS = tuple(int(re.match(r"\d*", x).group() or 0) for x in inets.__version__.split(".")[:3])
+_PRE = re.search(r"(a|b|rc|dev)\d*", inets.__version__)  # 0.1.3rc1 comes before 0.1.3
+if _NUMS < (0, 1, 3) or (_NUMS == (0, 1, 3) and _PRE):
     raise ImportError(f"ski/machine.py needs inets 0.1.3 or later (for the tables' declared duplicator and "
                       f"inets.ski.run's table and net_class); this is inets {inets.__version__}: pip install 'inets>=0.1.3'")
 from inets.ski import Ref, Run, parse, show, unfold, is_normal, name_subterms, ARITY, PARTIAL  # noqa: F401
