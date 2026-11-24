@@ -1,9 +1,10 @@
 # The `ski:` interaction system
 
 The combinators $S$, $K$ and $I$ as agents of an interaction net, declared as a table of 
-rules, with a machine that runs the table, a lowering that turns it into a program for the
-[IVM](https://github.com/VineLang/vine), and checks against tree reduction, against the
-IVM, and against programs compiled by [SKIjack](https://github.com/sigilante/SKIjack).
+rules, run by the [`inets`](https://github.com/sigilante/inets) package, with a lowering
+that turns the table into a program for the [IVM](https://github.com/VineLang/vine), and
+checks against tree reduction, against the IVM, and against programs compiled by
+[SKIjack](https://github.com/sigilante/SKIjack).
 
 It is an experiment which explores the interaction of the $S$, $K$ and $I$ combinators as 
 an interaction net and within the Vine virtual machine. Everything here is tested, on the 
@@ -17,31 +18,39 @@ that fires every pair, as the IVM does, can be made to stop only by giving up sh
 
 ## Try it
 
-These commands need only Python 3. A term is written in prefix form: a backtick applies
-the next term to the one after it; `S`, `K` and `I` stand for themselves; a digit is an
-atom, a constant that does nothing. $\Omega$ below is ```` ```SII``SII ````, which reduces
-to itself without end.
+The machine is the [`inets`](https://github.com/sigilante/inets) package, which grew out
+of the code that was first written here; it needs Python 3.10 or later:
 
 ```sh
-$ python3 ski/net.py '```SII0'             # S I I 0
-`00
-collect=3 contract=3 copy=1 most_nodes=8
-
-$ python3 ski/net.py '``KI```SII``SII'     # K I Ω, by need: only the work the answer depends on
-I
-collect=1 contract=1 most_nodes=15
-
-$ python3 ski/net.py --all '``KI```SII``SII'      # the same term, every pair fired
-stopped at a cap
-collect=5 contract=100000 copy=99997 most_nodes=15
-
-$ python3 ski/net.py --demand '``KI```SII``SII'   # every pair fired, the demand carried in the net
-I
-arrive=3 collect=1 contract=1 demand=2 erase=11 rounds=9 most_nodes=18
+pip install 'inets>=0.1.2'
 ```
 
-The first line of each output is the result, on standard output; the counts go to standard
-error. `contract` counts contractions, the steps of the calculus (`I x → x`, `K x y → x`,
+`inets` comes with the two tables of this directory, rule for rule (`ski/check.py table`
+confirms it), so its `inets run ski` runs this system. A term is written in prefix form: a
+backtick applies the next term to the one after it; `S`, `K` and `I` stand for
+themselves; a digit is an atom, a constant that does nothing. $\Omega$ below is
+```` ```SII``SII ````, which reduces to itself without end.
+
+```sh
+$ inets run ski '```SII0'                    # S I I 0
+stopped: wanted; 7 interactions; 0 active pairs left; collect 3, contract 3, copy 1
+`00
+
+$ inets run ski '``KI```SII``SII'            # K I Ω, by need: only the work the answer depends on
+stopped: wanted; 2 interactions; 2 active pairs left; collect 1, contract 1
+I
+
+$ inets run ski --rounds '``KI```SII``SII'   # the same term, every pair fired
+stopped: interactions; 1000000 interactions, 333334 rounds, widest 3; 3 active pairs left; collect 5, contract 499999, copy 499996
+stopped at the cap
+
+$ inets run ski --lazy '``KI```SII``SII'     # every pair fired, the demand carried in the net (lazy.rules)
+stopped: normal; 18 interactions, 9 rounds, widest 4; 0 active pairs left; arrive 3, collect 1, contract 1, demand 2, erase 11
+I
+```
+
+The last line of each output is the result, on standard output; why the run stopped and
+what it counted go to standard error. `contract` counts contractions, the steps of the calculus (`I x → x`, `K x y → x`,
 `S x y z → x z (y z)`). The other counts are work that a net does and a term rewriter does
 not.
 
@@ -74,7 +83,7 @@ Read it as: an application of `S x y` to `z` with result `r` becomes a duplicato
 and three applications: `x p`, `y q`, and the first of those applied to the second.
 
 **The rules are typed by port.** Every port is an output or an input, and
-[`table.py`](table.py) checks that each rule joins only an output to an input. In a net
+`inets` checks that each rule joins only an output to an input (`inets check ski/ski.rules`). In a net
 built from a term, then, the only principal ports that can ever meet are a consumer's and
 a value's, and every such pair has a rule. (One rule is outside this check: an application
 meeting a `ref` is an instruction to the machine, not a net.) Typing does not make a rule
@@ -101,7 +110,7 @@ never finishes, neither does the net.
 **By need**, a cursor starts at the root and fires a pair only when it is waiting on it.
 The cursor is a marker that moves only to work the result needs. A shared term is
 evaluated once, when one of its copies is first asked for. The cursor is part of the
-reducer ([`net.py`](net.py)), not of the net: the 27 rules are untouched.
+reducer (`reduce_by_need` in `inets`), not of the net: the 27 rules are untouched.
 
 **`lazy.rules`** puts the cursor in the net. An application in a term is an inert node,
 `ap`. A demand is an agent, `ev`, that turns an `ap` into an `app` and goes on to the
@@ -120,7 +129,7 @@ exists here: see [the last section](#a-graph-reducer-written-in-vine).
 ## Named nets
 
 Every subterm of a closed term of $S$, $K$ and $I$ is closed, so any of them can be a
-definition. [`names.py`](names.py) names subterms, and the term then holds a `ref` where
+definition. `inets.ski.name_subterms` names subterms, and the term then holds a `ref` where
 each stood. A reference that is applied is replaced by a fresh copy of what it names. A
 reference that is duplicated is copied as a name, and the term it names is not touched.
 The IVM treats a reference to a net the same way.
@@ -211,9 +220,7 @@ the copying to between a quarter and a half, and changes no contraction count.
 |---|---|
 | `ski.rules` | The system: 12 agents, 27 rules |
 | `lazy.rules` | The system with the demand carried in the net: 15 agents, 50 rules |
-| `table.py` | Reads a table and checks it: one rule for each consumer and value, and the typing |
-| `net.py` | The machine: builds a net from a term, fires rules from a table all at once or by need, reads the result back |
-| `names.py` | Names subterms, to be references to nets |
+| `machine.py` | The two tables loaded by `inets`, and a net that also counts each rule applied and the most nodes at once |
 | `ivy.py` | A term as Ivy text in the `ski:` system, and the translation to the IVM's agents |
 | `check.py` | The census: both tables against tree reduction and the reference reducer |
 | `skijack_check.py` | SKIjack's `tower` programs by need, against its reference reducer |
@@ -222,9 +229,8 @@ the copying to between a quarter and a half, and changes no contraction count.
 ## The checks
 
 ```sh
-python3 ski/table.py                    # ski.rules: complete and typed
-python3 ski/table.py ski/lazy.rules     # lazy.rules
-python3 ski/check.py all                # the census to size 6, both tables; under a minute
+inets check ski/ski.rules               # complete and typed; also ski/lazy.rules
+python3 ski/check.py all                # the census to size 6, both tables; about a minute
 python3 ski/check.py census 7           # ski.rules to size 7; a few minutes
 python3 ski/check.py demand 7           # lazy.rules to size 7; a few minutes
 ```
@@ -232,7 +238,7 @@ python3 ski/check.py demand 7           # lazy.rules to size 7; a few minutes
 With SKIjack's packages installed (`skijack`, `aviary_kernel`):
 
 ```sh
-python3 ski/skijack_check.py t0 t1      # t2 adds a quarter of an hour or so and several GB
+python3 ski/skijack_check.py t0 t1      # about four minutes; t2 has not been run with inets (see Limits)
 ```
 
 With an `ivm` binary built from VineLang/vine (tested at commit `cf0c325`):
@@ -251,9 +257,11 @@ Each script's opening lines say what it compares.
 
 - The evidence is tests, on small terms and three programs. There is no simulation theorem;
   the typing argument and the argument about sharing are on paper.
-- The machine is a reference in Python, not a tool. By need, t1 takes some seconds and t2
-  minutes and several GB. Reducing all at once rescans every node each round and is slow on
-  long terms.
+- The machine (`inets`) is a reference in Python, not a tool, and a general one: on t1 it
+  is four to five times slower than the machine written for this table that it replaced
+  (about 55 s against 10 s for one run by need). t2 took about six and a half minutes and
+  several GB on that machine and has not been run with `inets`; expect half an hour or
+  more.
 - By need never fires an eraser, so the machine sweeps away what the root cannot reach.
   That is housekeeping, not a rule. It changes the count of copies, never the count of
   contractions or the answer.

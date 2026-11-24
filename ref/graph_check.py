@@ -10,7 +10,7 @@ built once (`vine build bench/graph.vi --lib skivine`) and given a term on each 
 
 census: each term with a normal form (tree reduction, within caps) must print it, and the
 contractions the machine reports must equal those of reduction by need on the table
-machine (ski/net.py).
+machine (ski/machine.py, the `inets` package).
 
 skijack (needs the skijack and aviary_kernel packages): each program is reduced until its
 head is a value, and its contractions must equal the table machine's by need; the
@@ -21,9 +21,7 @@ constructor of its result is reduced to normal form, which must be the reference
 import os, re, subprocess, sys, tempfile, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "ski"))
-import table
-import names as naming
-from net import Net, Stop, show
+from machine import run as by_table, show, name_subterms
 from check import terms, lo_normal_form
 
 VINE = os.environ.get("VINE", "vine")
@@ -55,7 +53,6 @@ def run(program, lines, heap=None):
 
 
 def census(n_max):
-    agents, rules = table.load(table.default_path())
     todo, memo = [], {}
     for leaves, top in ((["S", "K", "I"], n_max), (["S", "K", "I", 0, 1], min(n_max, 5))):
         for n in range(1, top + 1):
@@ -63,9 +60,8 @@ def census(n_max):
                 nf, _ = lo_normal_form(t)
                 if nf is None:
                     continue
-                net = Net.of(t, agents, rules)
-                net.normalize(20000, 50000)
-                todo.append((t, show(nf), net.counts.get("contract", 0)))
+                r = by_table(t, "need", max_interactions=20000)
+                todo.append((t, show(nf), r.result.counts.get("contract", 0)))
     with tempfile.TemporaryDirectory() as directory:
         out, stats, seconds = run(build(directory), [show(t) for t, _, _ in todo])
     wrong = same = fewer = more = 0
@@ -94,7 +90,6 @@ def skijack_programs(names):
     from skijack.run import run_level0, run_level1
     from aviary_kernel.terms import App, Atom
     from skijack_check import convert
-    agents, rules = table.load(table.default_path())
     source = pathlib.Path(skijack.__file__).parent / "corpus" / "tower.ascii.ski"
     program = expand_program(parse(source.read_text(encoding="utf-8"), "ascii"))
     bad = 0
@@ -116,10 +111,8 @@ def skijack_programs(names):
             if name == "t2" and "--need" not in sys.argv:
                 need = "not run here: it takes minutes and GBs; --need runs it"
             else:
-                main, defs = naming.name(term, 2)
-                net = Net.of(main, agents, rules, defs, True)
-                net.head(10 ** 9, 6 * 10 ** 6)
-                need = net.counts.get("contract", 0)
+                main, defs = name_subterms(term)
+                need = by_table(main, "need", defs, True, deep=False, max_interactions=10 ** 9).result.counts.get("contract", 0)
                 bad |= need != count
             print(f"{name}: to a value, {count} contractions on the IVM (by need on the table machine: {need}; "
                   f"the reference reducer: {ref.steps}); "

@@ -9,11 +9,11 @@ program, and run by `ivm run`. Each printed line must be the term's normal form,
 IVM must raise no error flag.
 
 - Without --demand the table is ski.rules. The terms are those on which reducing every
-  pair at once stops (net.py's `run_all`, within caps), and the normal form is `run_all`'s.
+  pair in rounds stops (within caps), and the normal form is the one that gives.
 - With --demand the table is lazy.rules, which carries the demand in the net. The terms
   are all those with a normal form by tree reduction, including the ones that do not stop
-  under ski.rules, and the table machine's `run_all` must give that normal form too.
-- With --names the terms' subterms are named first (names.py), so references to nets are
+  under ski.rules, and the table machine, every pair fired, must give that normal form too.
+- With --names the terms' subterms are named first (`inets.ski.name_subterms`), so references to nets are
   exercised: normal subterms without --demand, every subterm with it.
 
 Also printed: the IVM's interactions beside the table machine's for the same terms. The
@@ -26,8 +26,8 @@ normal form the reference reducer gives.
 """
 import os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import table, names, ivy
-from net import Net, Stop, show
+import ivy
+from machine import run, system, show, parse, name_subterms
 from check import terms, lo_normal_form
 
 IVM = os.environ.get("IVM", "ivm")
@@ -47,13 +47,8 @@ def run_ivm(program, directory):
     return r.stdout.split("\n"), stats, "Error" in r.stderr or r.returncode != 0, r.stderr
 
 
-def table_for(demand):
-    here = os.path.dirname(os.path.abspath(__file__))
-    return table.load(os.path.join(here, "lazy.rules" if demand else "ski.rules"))
-
-
 def main(n_max, named, demand):
-    agents, rules = table_for(demand)
+    table = system(demand)
     memo, batch, want = {}, [], []
     ran = skipped = wrong = 0
     ours = {}
@@ -69,14 +64,14 @@ def main(n_max, named, demand):
         for t in batch:
             if named:
                 # Each term's names are kept apart by numbering them from where the last stopped.
-                main, d = names.name(t, 2, demand)
+                main, d = name_subterms(t, any_term=demand)
                 shift = len(defs) and max(defs) + 1
-                move = lambda u: ivy.Ref(u.k + shift) if isinstance(u, ivy.Ref) else ((move(u[0]), move(u[1])) if isinstance(u, tuple) else u)
+                move = lambda u: ivy.Ref(u.name + shift) if isinstance(u, ivy.Ref) else ((move(u[0]), move(u[1])) if isinstance(u, tuple) else u)
                 defs.update({k + shift: move(v) for k, v in d.items()})
                 mains.append(move(main))
             else:
                 mains.append(t)
-        lines, stats, error, log = run_ivm(ivy.lower(ivy.emit(mains, defs, demand), agents, rules), directory)
+        lines, stats, error, log = run_ivm(ivy.lower(ivy.emit(mains, defs, demand), table), directory)
         if error or len(lines) < len(batch):
             wrong += len(batch)
             print("THE IVM RAISED A FLAG, STOPPED, OR PRINTED TOO FEW LINES:", log[-300:])
@@ -88,8 +83,7 @@ def main(n_max, named, demand):
         for k in KINDS:
             theirs[k] += stats.get(k, 0)
         # The same answers lowered as they stand: nothing to reduce, only to print.
-        from net import parse
-        _, stats, error, log = run_ivm(ivy.lower(ivy.emit([parse(w) for w in want], None, demand), agents, rules), directory)
+        _, stats, error, log = run_ivm(ivy.lower(ivy.emit([parse(w) for w in want], None, demand), table), directory)
         for k in KINDS:
             printing[k] += stats.get(k, 0)
         batch.clear()
@@ -103,23 +97,22 @@ def main(n_max, named, demand):
                     if nf is None:
                         skipped += 1
                         continue
-                net = Net.of(t, agents, rules, direct=True)
-                try:
-                    net.run_all(50000, 100000)   # more than check.py's caps: lazy.rules takes more interactions
-                except Stop:
+                # More than check.py's cap: lazy.rules takes more interactions.
+                r = run(t, "lazy" if demand else "rounds", direct=True, max_interactions=50000)
+                if not r.result.finished:
                     if demand:
                         wrong += 1
                         print("DID NOT STOP on the table machine:", show(t))
                     skipped += 1
                     continue
-                if demand and net.read() != nf:
+                if demand and r.term != nf:
                     wrong += 1
                     print("WRONG on the table machine:", show(t))
                 ran += 1
-                for k, v in net.counts.items():
+                for k, v in r.result.counts.items():
                     ours[k] = ours.get(k, 0) + v
                 batch.append(t)
-                want.append(show(net.read()))
+                want.append(show(r.term))
                 if len(batch) == 500:
                     flush(directory)
         flush(directory)
@@ -145,7 +138,6 @@ def skijack_programs(which):
     from skijack.run import run_level0
     from aviary_kernel.terms import App, Atom
     from skijack_check import convert
-    agents, rules = table_for(True)
     source = pathlib.Path(skijack.__file__).parent / "corpus" / "tower.ascii.ski"
     program = expand_program(parse(source.read_text(encoding="utf-8"), "ascii"))
     bad = 0
@@ -156,8 +148,8 @@ def skijack_programs(which):
             for i in range(len(p.result_type.ctors)):
                 marked, ours = App(marked, Atom(f"m{i}")), (ours, i)
             want = show(convert(run_level0(marked, 3_000_000, whnf_only=False).term))
-            main, defs = names.name(ours, 2, True)
-            lines, stats, error, log = run_ivm(ivy.lower(ivy.emit([main], defs, True), agents, rules), directory)
+            main, defs = name_subterms(ours, any_term=True)
+            lines, stats, error, log = run_ivm(ivy.lower(ivy.emit([main], defs, True), system(True)), directory)
             ok = bool(lines) and lines[0] == want and not error
             bad |= not ok
             print(f"{name} on the IVM, applied to {len(p.result_type.ctors)} atoms: {lines[0][:60]}; "

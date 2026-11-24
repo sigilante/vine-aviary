@@ -2,8 +2,9 @@
 """Programs compiled by SKIjack, run on the ski: system by need and compared with
 SKIjack's reference reducer.
 
-    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1; t2 takes a quarter of an hour
-                                          or so and several GB of memory; not timed)
+    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1, about four minutes; t2 has not
+                                          been run since the machine became inets: expect
+                                          half an hour or more and several GB)
 
 Needs the `skijack` and `aviary_kernel` packages. The programs are the level-1
 declarations of `tower` in SKIjack's corpus: an interpreter written in S, K, I run on a
@@ -12,7 +13,8 @@ quoted program (t0), on the quoted unquoter (t1) and on the quoted interpreter i
 For each program:
 - it is reduced by need until its root is a value, and the contractions are counted
   beside the reference reducer's count for the same job; then again with values built
-  directly, and with its normal subterms named as well (names.py). All three must take
+  directly, and with its normal subterms named as well (`inets.ski.name_subterms`). All
+  three must take
   the same number of contractions;
 - its answer is compared with the reference's. The answer is Scott-encoded, so it is read
   as SKIjack reads it: the program is applied to one atom for each constructor of its
@@ -21,9 +23,7 @@ For each program:
 """
 import os, pathlib, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import table
-import names as naming
-from net import Net, Stop, show
+from machine import run, show, name_subterms
 
 try:
     import skijack
@@ -57,7 +57,6 @@ def convert(t):
 
 
 def main(names):
-    agents, rules = table.load(table.default_path())
     source = pathlib.Path(skijack.__file__).parent / "corpus" / "tower.ascii.ski"
     program = expand_program(parse(source.read_text(encoding="utf-8"), "ascii"))
     bad = 0
@@ -69,23 +68,21 @@ def main(names):
         counts = []
         for label, named, direct in (("as applications", False, False), ("values built directly", False, True),
                                      ("values built directly, normal subterms named", True, True)):
-            main, defs = naming.name(term, 2) if named else (term, {})
-            net = Net.of(main, agents, rules, defs, direct)
+            main, defs = name_subterms(term) if named else (term, {})
             start = time.time()
-            net.head(10 ** 9, 6 * 10 ** 6)
-            c = net.counts
-            counts.append(c.get("contract", 0))
+            r = run(main, "need", defs, direct, deep=False, max_interactions=10 ** 9)
+            c = r.result.counts
+            counts.append(c.get("contract", 0) if r.result.finished else None)
             print(f"  by need, {label}: {c.get('contract', 0)} contractions, {c.get('collect', 0)} arguments taken, "
                   f"{c.get('copy', 0)} copies, {c.get('expand', 0)} expansions of {len(defs)} names; "
-                  f"{net.fired} interactions in all; at most {net.most} nodes; {time.time() - start:.0f} s")
-        bad |= len(set(counts)) != 1
+                  f"{r.result.interactions} interactions in all; at most {r.net.most} nodes; {time.time() - start:.0f} s"
+                  + ("" if r.result.finished else f"; STOPPED: {r.result.reason}"))
+        bad |= len(set(counts)) != 1 or None in counts
         marked, ours = p.term, convert(p.term)
         for i in range(len(p.result_type.ctors)):
             marked, ours = App(marked, Atom(f"m{i}")), (ours, i)
         want = run_level0(marked, CAP, whnf_only=False)
-        net = Net.of(ours, agents, rules)
-        net.normalize(10 ** 9, 5 * 10 ** 6)
-        got = net.read()
+        got = run(ours, "need", max_interactions=10 ** 9).term
         same = want.status.value == "normal" and got == convert(want.term)
         bad |= not same
         text = show(got)

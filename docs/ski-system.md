@@ -5,15 +5,28 @@ with a machine that reduces by need. It extends the six-rule system for pure S
 (`inets-pure-S.md`) with K, I, an eraser and inert atoms, and supplies the call-by-need
 evaluation that `NOTES.md` lists as wanted.
 
+Since 2026-11-24 (later the same day) the machine is the `inets` package, which was made
+from `table.py`, `net.py` and `names.py`; those three files are gone. Below, `run_all` is
+now `reduce_in_rounds`, `normalize` and `head` are `reduce_by_need` (deep or not), and
+`names.py` is `inets.ski.name_subterms` (which names every normal application; the old
+minimum of 2 leaves excluded nothing, since an application has at least 2), and
+`Net.sweep` is `inets.Net.sweep` with `collapse=("dup",)`. Rerun with the package, the output of each kept
+check is the same as before, line for line, counts included: `check.py all`, `census 7`
+and `demand 7`; `skijack_check.py t0 t1`; and `ivm_check.py 5` with and without
+`--names` and `--demand`, and `--skijack t0`; and `ref/graph_check.py census 6` and
+`skijack t0 t1`, which compare the graph reducer with it. The package had to learn one thing for
+this: removing a duplicator that has lost a copy (`collapse`), without which the copies
+by need on t1 are 23,475,006 rather than 2,030,766. Not rerun: t2, and the figures this
+note marks as runs by hand. The checks now take about twice as long, and t1 by need about
+five times as long, since the package is a general machine.
+
 | File | Holds |
 |---|---|
 | `ski/ski.rules` | The system: 12 agents, 27 rules |
 | `ski/lazy.rules` | A second table, with the demand carried in the net: 15 agents, 50 rules |
-| `ski/table.py` | Reads the table and checks it |
-| `ski/net.py` | A net machine driven by the table, with two schedules |
+| `ski/machine.py` | The tables loaded by the `inets` package, which checks them and is the machine: by need or all at once by `ski.rules`, all at once by `lazy.rules` |
 | `ski/check.py` | Census against tree reduction and the reference reducer |
 | `ski/skijack_check.py` | Programs compiled by SKIjack, against its reference reducer |
-| `ski/names.py` | Names subterms, to be references to nets: the normal ones, or all of them |
 | `ski/ivy.py` | Either table as Ivy text, and its lowering to the IVM's own agents |
 | `ski/ivm_check.py` | The lowering run on the IVM itself |
 
@@ -40,7 +53,7 @@ A contraction of the calculus is exactly one application of a rule counted `cont
 arguments shared behind new duplicators.
 
 **The rules are typed.** Each port is an output or an input, and a wire joins one of each.
-`table.py` checks that every rule keeps this, so in a net built from a term the only
+`inets` checks that every rule keeps this, so in a net built from a term the only
 principal ports that can meet are a consumer's and a value's, and each such pair has a
 rule. One rule is outside the typing: an application meeting a reference (below) is not a
 net but an instruction to the machine, which puts a new copy of a term, with its one
@@ -53,6 +66,9 @@ exact counts in `check.py cases`; and a rule that leaves an extra, unreachable n
 changes no answer and is caught by nothing.
 
 ## Two schedules, one system
+
+(A third way, `lazy.rules` with every pair fired, is a second system and has its own
+section below.)
 
 - **All at once** (`run_all`): every active pair, in rounds. This is the IVM's way.
 - **By need** (`normalize`, `head`): a cursor starts at the root and fires a pair only
@@ -108,9 +124,8 @@ was; it now makes three runs of each program).
 ## Named nets
 
 Every subterm of a closed term of S, K and I is closed, so any of them can be made a
-definition. `names.py` names each application in argument position (and the whole term)
-that is in normal form and has at least a given number of leaves; equal subterms get one
-name. The term then holds references in their place. A reference has three rules: applied,
+definition. `names.py` (now `inets.ski.name_subterms`) names each application in argument
+position (and the whole term) that is in normal form; equal subterms get one name. The term then holds references in their place. A reference has three rules: applied,
 it is replaced by a new copy of the term it names; duplicated, the name is copied and the
 term is not touched; erased, it vanishes. These are what the IVM does with a reference to
 a net at a label-0 combinator, a label-1 combinator and an eraser. One expansion is not a

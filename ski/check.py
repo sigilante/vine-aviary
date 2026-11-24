@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Checks of the ski: system (ski.rules) and its machine (net.py).
+"""Checks of the ski: system (ski.rules and lazy.rules), run by the inets package
+(machine.py).
 
-    check.py table            the tables are complete and their rules are typed
+    check.py table            the tables are complete and their rules are typed, and are the
+                              same as the copies that come with inets
     check.py census [N]       every term of S, K, I up to size N (default 6)
     check.py atoms [N]        the same with two atoms among the leaves (default 5)
-    check.py cases            a few named terms
+    check.py cases            a few named terms; the count of each kind of rule on single
+                              rules; sweeping after every interaction changes no answer or
+                              contraction; K I Ω does not stop all at once
     check.py demand [N]       lazy.rules, the demand carried in the net (default 6)
     check.py all              all of the above, with their defaults
 
 In the census, for every term with a leftmost-outermost normal form (tree reduction,
 within caps) reduction by need must stop and give that normal form, and must do so again,
-in the same number of contractions, when the term's normal subterms are named (names.py).
+in the same number of contractions, when the term's normal subterms are named
+(`inets.ski.name_subterms`).
 Reduction of every pair at once must give it too whenever it stops within its caps, with
 and without names. Where the reference
 reducer `aviary_kernel` is installed, its number of contractions is compared with the
@@ -21,9 +26,8 @@ would catch a rule counted under the wrong name.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import table
-from net import Net, Stop, parse, show, unfold
-import names
+import inets
+from machine import run, system, parse, show, unfold, name_subterms
 
 ARITY = {"S": 3, "K": 2, "I": 1}
 
@@ -114,7 +118,7 @@ def reference():
 
 
 def census(label, leaves, n_max):
-    agents, rules = table.load(table.default_path())
+    rules = system().rules
     ref = reference()
     memo = {}
     ran = wrong = unstopped = skipped = 0
@@ -130,19 +134,16 @@ def census(label, leaves, n_max):
                 skipped += 1
                 continue
             ran += 1
-            net = Net.of(t, agents, rules)
-            try:
-                net.normalize(20000, 50000)
-                if net.read() != nf:
-                    wrong += 1
-                    print("WRONG by need:", show(t))
-            except Stop:
+            r = run(t, "need", max_interactions=20000)
+            if not r.result.finished:
                 unstopped += 1
                 print("DID NOT STOP by need:", show(t))
                 continue
-            for line, k in net.used.items():
-                used[line] = used.get(line, 0) + k
-            need = net.counts.get("contract", 0)
+            if r.term != nf:
+                wrong += 1
+                print("WRONG by need:", show(t))
+            tally(used, r)
+            need = r.result.counts.get("contract", 0)
             if ref:
                 status, contractions = ref(t, 5000)
                 if status == "normal":
@@ -154,47 +155,39 @@ def census(label, leaves, n_max):
                 print("MORE CONTRACTIONS THAN TREE STEPS:", show(t))
             # With its normal subterms named and values built directly: the same normal form
             # in the same number of contractions.
-            main, defs = names.name(t, 2)
-            net = Net.of(main, agents, rules, defs, True)
-            try:
-                net.normalize(20000, 50000)
-                if unfold(main, defs) != t or net.read() != nf or net.counts.get("contract", 0) != need:
-                    wrong += 1
-                    print("WRONG with names:", show(t))
-            except Stop:
+            main, defs = name_subterms(t)
+            r = run(main, "need", defs, True, max_interactions=20000)
+            if not r.result.finished:
                 unstopped += 1
                 print("DID NOT STOP with names:", show(t))
+            elif unfold(main, defs) != t or r.term != nf or r.result.counts.get("contract", 0) != need:
+                wrong += 1
+                print("WRONG with names:", show(t))
             named_terms += bool(defs)
-            for line, k in net.used.items():
-                used[line] = used.get(line, 0) + k
+            tally(used, r)
             if steps - need > worst[0] - worst[1]:
                 worst = (steps, need, t)
-            net = Net.of(t, agents, rules)
-            try:
-                net.run_all(20000, 50000)
-                if net.read() == nf:
-                    every_ok += 1
-                else:
-                    every_wrong += 1
-                    print("WRONG all at once:", show(t))
-                for line, k in net.used.items():
-                    used[line] = used.get(line, 0) + k
-            except Stop:
+            r = run(t, "rounds", max_interactions=20000)
+            if not r.result.finished:
                 every_unstopped += 1
                 continue
+            if r.term == nf:
+                every_ok += 1
+            else:
+                every_wrong += 1
+                print("WRONG all at once:", show(t))
+            tally(used, r)
             # All at once with names: the same normal form. (Here an eraser can meet a
             # reference, which reduction by need never asks for.)
-            net = Net.of(main, agents, rules, defs, True)
-            try:
-                net.run_all(20000, 50000)
-                if net.read() != nf:
-                    every_wrong += 1
-                    print("WRONG all at once with names:", show(t))
-                for line, k in net.used.items():
-                    used[line] = used.get(line, 0) + k
-            except Stop:
+            r = run(main, "rounds", defs, True, max_interactions=20000)
+            if not r.result.finished:
                 every_wrong += 1
                 print("DID NOT STOP all at once with names:", show(t))
+                continue
+            if r.term != nf:
+                every_wrong += 1
+                print("WRONG all at once with names:", show(t))
+            tally(used, r)
     print(f"{label}, sizes <= {n_max}: {ran} terms with a normal form ({skipped} without one within the caps, not run)")
     print(f"  by need: {ran - wrong - unstopped} give it, {wrong} wrong, {unstopped} did not stop")
     print(f"  by need with normal subterms named: the same normal forms and contraction counts ({named_terms} terms have something to name)")
@@ -203,13 +196,12 @@ def census(label, leaves, n_max):
         print(f"  contractions by need against the reference reducer's: equal for {same}, fewer for {fewer}, more for {more}")
     if worst[2] is not None:
         print(f"  largest saving over tree reduction: {worst[0]} steps against {worst[1]} contractions, for {show(worst[2])}")
-    unused = [r.title() for r in rules if r.line not in used]
+    unused = [str(r) for r in rules if r.line not in used]
     print("  rules never applied: " + ("; ".join(unused) if unused else "none"))
     return wrong or unstopped or every_wrong or more
 
 
 def cases():
-    agents, rules = table.load(table.default_path())
     bad = 0
     omega = "```SII``SII"
     rows = [
@@ -220,18 +212,16 @@ def cases():
         ("K x Ω under an atom", "`0``K1" + omega, "`01"),
     ]
     for name, text, want in rows:
-        net = Net.of(parse(text), agents, rules)
-        net.normalize()
-        got = show(net.read())
+        r = run(text, "need")
+        got = show(r.term)
         ok = got == want
         bad |= not ok
-        print(f"{name}: {text} -> {got} ({'as expected' if ok else 'EXPECTED ' + want}); {net.fired} interactions, {net.counts.get('contract', 0)} contractions")
+        print(f"{name}: {text} -> {got} ({'as expected' if ok else 'EXPECTED ' + want}); {r.result.interactions} interactions, {r.result.counts.get('contract', 0)} contraction{'' if r.result.counts.get('contract', 0) == 1 else 's'}")
     # One rule at a time: what each is counted as.
     for text, want in (("`I0", {"contract": 1}), ("``K01", {"collect": 1, "contract": 1}),
                        ("```S012", {"collect": 4, "contract": 1}), ("`01", {"collect": 1})):
-        net = Net.of(parse(text), agents, rules)
-        net.head()
-        got = {k: v for k, v in net.counts.items() if k in ("collect", "contract")}
+        r = run(text, "need", deep=False)
+        got = {k: v for k, v in r.result.counts.items() if k in ("collect", "contract")}
         if got != want:
             bad = 1
             print(f"COUNTS: {text} gives {got}, expected {want}")
@@ -239,40 +229,37 @@ def cases():
     # Sweeping after every interaction must change no answer and no contraction count.
     for text in ("```SII```SKK```SKK0", "``KI" + omega, "```S``SKK``SKK```SII0", "````SSS`IS0"):
         runs = []
-        for always in (False, True):
-            net = Net.of(parse(text), agents, rules)
-            net.sweep_always = always
-            net.normalize()
-            runs.append((show(net.read()), net.counts.get("contract", 0)))
+        for above in (20000, 0):
+            r = run(text, "need", sweep_above=above)
+            runs.append((show(r.term), r.result.counts.get("contract", 0)))
         if runs[0] != runs[1]:
             bad = 1
             print(f"SWEEPING CHANGED {text}: {runs}")
-    net = Net.of(parse("``KI" + omega), agents, rules)
-    try:
-        net.run_all(20000, 50000)
+    r = run("``KI" + omega, "rounds", max_interactions=20000)
+    if r.result.finished:
         print("K I Ω all at once: stopped, which is not expected")
         bad = 1
-    except Stop:
-        print(f"K I Ω all at once: still running after {net.fired} interactions, as expected")
+    else:
+        print(f"K I Ω all at once: still running after {r.result.interactions} interactions, as expected")
     # Shared work: (S I I) applied to a term that takes work to evaluate.
     work = "```SKK```SKK```SKK0"
     twice = "```SII" + work
-    one, two = Net.of(parse(work), agents, rules), Net.of(parse(twice), agents, rules)
-    one.normalize()
-    two.normalize()
+    one, two = run(work, "need"), run(twice, "need")
     _, tree = lo_normal_form(parse(twice))
-    print(f"a shared argument: evaluating it once takes {one.counts['contract']} contractions; used twice, {two.counts['contract']} by need, {tree} by tree reduction")
+    print(f"a shared argument: evaluating it once takes {one.result.counts['contract']} contractions; used twice, {two.result.counts['contract']} by need, {tree} by tree reduction")
     return bad
 
 
-LAZY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lazy.rules")
+def tally(used, r):
+    for line, k in r.net.used.items():
+        used[line] = used.get(line, 0) + k
 
 
 def demand(n_max):
     """lazy.rules, which carries the demand in the net, with every pair fired: every term
     with a normal form must stop and give it, in exactly as many contractions as
     leftmost-outermost tree reduction takes steps."""
-    agents, rules = table.load(LAZY)
+    rules = system(lazy=True).rules
     memo, used = {}, {}
     wrong, counts = 0, []
     for leaves, top in ((["S", "K", "I"], n_max), (["S", "K", "I", 0, 1], min(n_max, 5))):
@@ -286,40 +273,47 @@ def demand(n_max):
                     skipped += 1
                     continue
                 ran += 1
-                main, defs = names.name(t, 2, True)
+                main, defs = name_subterms(t, any_term=True)
                 for term, d, direct in ((t, {}, False), (t, {}, True), (main, defs, True)):
-                    net = Net.of(term, agents, rules, d, direct)
-                    try:
-                        net.run_all(50000, 100000)
-                    except Stop:
+                    r = run(term, "lazy", d, direct, max_interactions=50000)
+                    if not r.result.finished:
                         wrong += 1
                         print("DID NOT STOP:", show(t))
                         continue
-                    if net.read() != nf or net.counts.get("contract", 0) != steps:
+                    if r.term != nf or r.result.counts.get("contract", 0) != steps:
                         wrong += 1
-                        print("WRONG:", show(t), show(net.read()), net.counts.get("contract", 0), steps)
-                    for line, k in net.used.items():
-                        used[line] = used.get(line, 0) + k
+                        print("WRONG:", show(t), show(r.term), r.result.counts.get("contract", 0), steps)
+                    tally(used, r)
     print(f"lazy.rules, every pair fired; S, K, I to size {n_max}: {counts[0][0]} terms with a normal form "
           f"({counts[0][1]} without one within the caps, not run); with two atoms as well, to size {min(n_max, 5)}: "
           f"{counts[1][0]} (these include the first family's terms up to that size); each as applications, with values "
           f"built directly, and with every subterm named: {wrong} wrong")
     print("  each stops with its normal form in as many contractions as tree reduction takes steps" if not wrong else "  see above")
-    unused = [r.title() for r in rules if r.line not in used]
+    unused = [str(r) for r in rules if r.line not in used]
     print("  rules never applied: " + ("; ".join(unused) if unused else "none"))
     return wrong
 
 
 def check_table():
+    """The checks of inets (`inets check`): for these signed tables, one rule for each
+    consumer and value and no other, and no rule that joins two outputs or two inputs."""
     bad = 0
-    for path in (table.default_path(), LAZY):
-        agents, rules = table.load(path)
-        problems = table.check(agents, rules)
-        values = sum(1 for a in agents.values() if a.value)
-        print(f"{os.path.basename(path)}: {len(agents)} agents ({values} values, {len(agents) - values} consumers), {len(rules)} rules, {len(problems)} problems")
+    for lazy, name in ((False, "ski.rules"), (True, "lazy.rules")):
+        table = system(lazy)
+        problems = table.check()
+        values = sum(1 for a in table.agents.values() if a.is_value)
+        print(f"{name}: {len(table.agents)} agents ({values} values, {len(table.agents) - values} consumers), {len(table.rules)} rules, {len(problems)} problems")
         for p in problems:
             print("  PROBLEM:", p)
         bad += len(problems)
+        # inets comes with a copy of each table; `inets run ski` uses it.
+        rule = lambda r: (str(r), r.count, r.body, r.when)
+        copy = inets.bundled("lazy" if lazy else "ski")
+        if copy.agents != table.agents or [rule(r) for r in copy.rules] != [rule(r) for r in table.rules]:
+            print(f"  PROBLEM: inets' bundled copy of {name} differs from this one")
+            bad += 1
+        else:
+            print(f"  the same agents and rules as the copy that comes with inets {inets.__version__}")
     return bad
 
 

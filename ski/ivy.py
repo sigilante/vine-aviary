@@ -8,8 +8,8 @@
 Without --demand the table is ski.rules; with it, lazy.rules, where an application in a
 term is the inert `ski:ap` and the demand is carried by `ski:ev` and `ski:nf`.
 
-A term is in prefix form (net.py); its arguments may nest a few thousand deep at most,
-unless its subterms are named first (names.py). Ivy is Vine's text for nets: a file is named nets, a
+A term is in prefix form (`inets.ski.parse`); its arguments may nest a few thousand deep
+at most, unless its subterms are named first (`inets.ski.name_subterms`). Ivy is Vine's text for nets: a file is named nets, a
 net is equations between trees of nodes, a node stands for its principal port, a wire is a
 name used twice, and `^` is the net's free port.
 
@@ -38,14 +38,14 @@ main net, and the nets that print a value. The duplication and erasure
 rules are not lowered at all: the claim, which the checks test, is that the IVM's own
 commutation and erasure do to the lowered nodes what those rules say.
 
-The IVM fires every pair, so a lowered program behaves as `run_all` does, not as reduction
-by need. By ski.rules a term whose dropped argument never stops never stops; by lazy.rules
+The IVM fires every pair, so a lowered program behaves as reducing every pair in rounds
+does, not as reduction by need. By ski.rules a term whose dropped argument never stops never stops; by lazy.rules
 it stops, but no work is shared.
 """
 import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import table
-from net import Ref, parse as parse_term, ARITY, PARTIAL
+from inets.system import Expand
+from machine import system, Ref, parse as parse_term, ARITY, PARTIAL
 
 # The values that are lowered to a tagged node; the order is the tag. `ap`, an application
 # not yet asked for, is one of them in a table that has it (lazy.rules).
@@ -117,7 +117,7 @@ def term_net(term, fresh=None, lazy=False):
         if isinstance(t, int):
             return node("ski:atom", payload=t)
         if isinstance(t, Ref):
-            return node("ski:ref", names=[f"ski:def:{t.k}"])
+            return node("ski:ref", names=[f"ski:def:{t.name}"])
         head, args = t, []
         while isinstance(head, tuple):
             args.append(head[1])
@@ -152,7 +152,7 @@ def emit(terms, defs=None, lazy=False):
     except RecursionError:
         # The text is a tree as deep as the term's arguments nest, and it is written by
         # recursion: a few thousand levels is the most. Named terms nest one level each.
-        raise ValueError("arguments nest too deeply to write as one tree: name the subterms first (names.py)") from None
+        raise ValueError("arguments nest too deeply to write as one tree: name the subterms first (inets.ski.name_subterms)") from None
     return "\n".join(parts)
 
 
@@ -271,44 +271,40 @@ def lower_net(eqs, values, fresh=None):
     return [(lower_tree(a, fresh, values), lower_tree(b, fresh, values)) for a, b in eqs]
 
 
-def rule_tree(toks, agents):
-    """A tree from a rule's right-hand side in ski.rules."""
-    head = toks.pop(0)
-    if head not in agents:
-        return head
-    agent = agents[head]
-    payload = toks.pop(0) if agent.param else None
-    kids = []
-    if agent.arity:
-        assert toks.pop(0) == "("
-        while toks[0] != ")":
-            kids.append(rule_tree(toks, agents))
-        toks.pop(0)
-    return (NODE[head], payload, [], kids)
+def rule_equations(rule, agents):
+    """The right-hand side of a rule as equations between ski: trees. A port of the pair
+    is the letter the rule names it by, and a wire between two new nodes is a new name."""
+    body = rule.body
+    wires = {}
+
+    def end(e):
+        if e[0] == "ext":
+            return e[1]
+        assert e[0] == "new", f"{rule}: a rule that keeps a node of its pair is not lowered"
+        _, i, j = e
+        if j == 0:
+            return trees[i]
+        return wires.setdefault((i, j), f"n{i}p{j}")
+
+    trees = [(NODE[name], param, [], [wires.setdefault((i, j), f"n{i}p{j}") for j in range(1, agents[name].arity + 1)])
+             for i, (name, param) in enumerate(body.nodes)]
+    return [(end(a), end(b)) for a, b in body.links]
 
 
-def rule_nets(agents, rules):
+def rule_nets(table):
     """For each rule of a consumer that looks at what it meets (application, a demand)
     and a tagged value, the ivm: net that the branch picks: its free port takes the
     value's payload, then the consumer's own ports."""
-    values = tagged(agents)
+    values = tagged(table.agents)
     out = []
-    for r in rules:
-        if r.left[0] in ("dup", "era") or r.expand:
+    for r in table.rules:
+        if r.left.agent in ("dup", "era") or isinstance(r.body, Expand):
             continue
-        _, param, aux = r.right
-        payload = param if param else pack(aux)
+        payload = r.right.param if r.right.param else pack(list(r.right.aux))
         fresh = Fresh("v")
-        eqs = [("^", node("ivm:x", payload, pack(r.left[2])))]
-        toks = table.tokens(r.text)
-        while toks and toks != ["nothing"]:
-            a = rule_tree(toks, agents)
-            assert toks.pop(0) == "="
-            b = rule_tree(toks, agents)
-            eqs.append((lower_tree(a, fresh, values), lower_tree(b, fresh, values)))
-            if toks:
-                assert toks.pop(0) == ";"
-        out.append(net_text(f"{NODE[r.left[0]]}:{r.right[0].lower()}", simplify(eqs)))
+        eqs = [("^", node("ivm:x", payload, pack(list(r.left.aux))))]
+        eqs += [(lower_tree(a, fresh, values), lower_tree(b, fresh, values)) for a, b in rule_equations(r, table.agents)]
+        out.append(net_text(f"{NODE[r.left.agent]}:{r.right.agent.lower()}", simplify(eqs)))
     return out
 
 
@@ -374,13 +370,12 @@ def show_nets(values):
     return out
 
 
-def lower(ski_text, agents=None, rules=None):
+def lower(ski_text, table=None):
     """ski: Ivy text as a program in the ivm: system that prints each `ski:term:i`'s
-    normal form on a line."""
-    if agents is None:
-        agents, rules = table.load(table.default_path())
+    normal form on a line, by `table` (an `inets.System`; ski.rules if not given)."""
+    table = table or system()
     nets = read(ski_text)
-    values = tagged(agents)
+    values = tagged(table.agents)
 
     def atoms(tree):
         if not isinstance(tree, str):
@@ -406,7 +401,7 @@ def lower(ski_text, agents=None, rules=None):
     parts.append(net_text("iv:main", eqs))
     for name, body in nets.items():
         parts.append(net_text(name, lower_net(body, values)))
-    parts += rule_nets(agents, rules)
+    parts += rule_nets(table)
     parts += show_nets(values)
     return "\n".join(parts)
 
@@ -418,5 +413,4 @@ if __name__ == "__main__":
     demand = "--demand" in texts
     terms = [parse_term(t) for t in texts if t != "--demand"]
     ski = emit(terms, lazy=demand)
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lazy.rules" if demand else "ski.rules")
-    print(ski if mode == "emit" else lower(ski, *table.load(path)))
+    print(ski if mode == "emit" else lower(ski, system(demand)))
