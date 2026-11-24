@@ -6,7 +6,8 @@ copied a structure.
 
 Every subterm of a closed term of S, K and I is itself closed, so any of them can be a
 definition. A subterm is named when it is an application in argument position (or the
-whole term), is in normal form, and has at least `least` leaves. `defs` maps each name to
+whole term), is in normal form, and has at least `least` leaves. Equal subterms get one
+name, wherever they occur. `defs` maps each name to
 its term, in which named arguments are again references; `main` is the term so rewritten.
 
 Only normal forms are named, on purpose. A reference is expanded afresh at each use, so
@@ -68,13 +69,14 @@ def name(term, least=2):
             defs[n] = inline[n]
     main = Ref(root) if named(root) else inline[root]
     # Keep only the definitions the main term can reach.
-    keep, todo = {}, [main]
+    keep, todo, seen = {}, [main], set()
     while todo:
         t = todo.pop()
         if isinstance(t, Ref):
             if t.k not in keep:
                 keep[t.k] = defs[t.k]
                 todo.append(defs[t.k])
-        elif isinstance(t, tuple):
+        elif isinstance(t, tuple) and id(t) not in seen:
+            seen.add(id(t))   # the rewritten term shares what the term shared
             todo.extend(t)
     return main, keep

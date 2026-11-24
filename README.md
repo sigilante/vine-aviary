@@ -38,13 +38,13 @@ python3 tools/gen_combinators.py  # regenerate skivine/combinators.vi
 echo '```B S K I' | vine run bench/birds.vi --lib skivine --no-stats
 ```
 
-The `ski:` system's checks need only Python 3 (and, for the last, the `skijack` and
-`aviary_kernel` packages):
+The `ski:` system's checks need only Python 3; `skijack_check.py` also needs the `skijack`
+and `aviary_kernel` packages, and `ivm_check.py` an `ivm` binary:
 
 ```sh
 python3 ski/table.py                  # the table and its typing
-python3 ski/check.py all              # about 5 s; `census 7` takes a minute
-python3 ski/skijack_check.py t0 t1    # t2 adds about ten minutes and several GB
+python3 ski/check.py all              # about 10 s; `census 7` takes a minute or two
+python3 ski/skijack_check.py t0 t1    # t2 adds a quarter of an hour or so and several GB
 IVM=/path/to/ivm python3 ski/ivm_check.py   # the lowering on the IVM; add --names
 ```
 

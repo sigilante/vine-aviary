@@ -355,7 +355,9 @@ class Net:
 
 
 def unfold(term, defs):
-    """The term with every reference replaced by the term it names."""
+    """The term with every reference replaced by the term it names. (Recursive: one
+    level for each level at which named terms nest.)"""
+    sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
     memo = {}
 
     def named(k):

@@ -5,7 +5,8 @@
     ivy.py lower TERM...       the same lowered to the ivm: system: a program for `ivm run`
                                that prints each term's normal form on a line
 
-A term is in prefix form (net.py). Ivy is Vine's text for nets: a file is named nets, a
+A term is in prefix form (net.py); its arguments may nest a few thousand deep at most,
+unless its subterms are named first (names.py). Ivy is Vine's text for nets: a file is named nets, a
 net is equations between trees of nodes, a node stands for its principal port, a wire is a
 name used twice, and `^` is the net's free port.
 
@@ -26,7 +27,9 @@ free port.
 | `ski:app` | a label-0 combinator that takes the value apart, then the IVM's branch on the tag, which picks the net for that value's rule and joins it to the payload, the argument and the result |
 
 The nets for the rules are not written here: each `app >< value` rule of ski.rules is
-lowered, right-hand side and all, by the same table of agents. The duplication and erasure
+lowered, right-hand side and all, by the same table of agents. Written by hand, and not
+derived from the rule table: how each agent is lowered (above), the order of the tags, the
+main net, and the nets that print a value. The duplication and erasure
 rules are not lowered at all: the claim, which the checks test, is that the IVM's own
 commutation and erasure do to the lowered nodes what those rules say.
 
@@ -121,8 +124,13 @@ def term_net(term, fresh=None):
 def emit(terms, defs=None):
     """ski: Ivy text: a net `ski:term:i` for each term and `ski:def:k` for each name."""
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
-    parts = [net_text(f"ski:term:{i}", term_net(t)) for i, t in enumerate(terms)]
-    parts += [net_text(f"ski:def:{k}", term_net(t)) for k, t in sorted((defs or {}).items())]
+    try:
+        parts = [net_text(f"ski:term:{i}", term_net(t)) for i, t in enumerate(terms)]
+        parts += [net_text(f"ski:def:{k}", term_net(t)) for k, t in sorted((defs or {}).items())]
+    except RecursionError:
+        # The text is a tree as deep as the term's arguments nest, and it is written by
+        # recursion: a few thousand levels is the most. Named terms nest one level each.
+        raise ValueError("arguments nest too deeply to write as one tree: name the subterms first (names.py)") from None
     return "\n".join(parts)
 
 
@@ -372,6 +380,8 @@ def lower(ski_text, agents=None, rules=None):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) < 3 or sys.argv[1] not in ("emit", "lower"):
+        sys.exit("usage: ivy.py emit|lower TERM...")
     mode, texts = sys.argv[1], sys.argv[2:]
     terms = [parse_term(t) for t in texts]
     ski = emit(terms)

@@ -10,7 +10,8 @@
 In the census, for every term with a leftmost-outermost normal form (tree reduction,
 within caps) reduction by need must stop and give that normal form, and must do so again,
 in the same number of contractions, when the term's normal subterms are named (names.py).
-Reduction of every pair at once must give it too whenever it stops within its caps. Where the reference
+Reduction of every pair at once must give it too whenever it stops within its caps, with
+and without names. Where the reference
 reducer `aviary_kernel` is installed, its number of contractions is compared with the
 number of `contract` rules applied by need (without it that line is not printed). By need
 must never take more contractions than the reference or than tree reduction; taking fewer
@@ -179,10 +180,24 @@ def census(label, leaves, n_max):
                     used[line] = used.get(line, 0) + k
             except Stop:
                 every_unstopped += 1
+                continue
+            # All at once with names: the same normal form. (Here an eraser can meet a
+            # reference, which reduction by need never asks for.)
+            net = Net.of(main, agents, rules, defs, True)
+            try:
+                net.run_all(20000, 50000)
+                if net.read() != nf:
+                    every_wrong += 1
+                    print("WRONG all at once with names:", show(t))
+                for line, k in net.used.items():
+                    used[line] = used.get(line, 0) + k
+            except Stop:
+                every_wrong += 1
+                print("DID NOT STOP all at once with names:", show(t))
     print(f"{label}, sizes <= {n_max}: {ran} terms with a normal form ({skipped} without one within the caps, not run)")
     print(f"  by need: {ran - wrong - unstopped} give it, {wrong} wrong, {unstopped} did not stop")
     print(f"  by need with normal subterms named: the same normal forms and contraction counts ({named_terms} terms have something to name)")
-    print(f"  all at once: {every_ok} give it, {every_wrong} wrong, {every_unstopped} did not stop within the caps")
+    print(f"  all at once, and again with names: {every_ok} give it, {every_wrong} wrong, {every_unstopped} did not stop within the caps")
     if ref:
         print(f"  contractions by need against the reference reducer's: equal for {same}, fewer for {fewer}, more for {more}")
     if worst[2] is not None:

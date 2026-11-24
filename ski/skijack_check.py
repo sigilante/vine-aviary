@@ -2,8 +2,8 @@
 """Programs compiled by SKIjack, run on the ski: system by need and compared with
 SKIjack's reference reducer.
 
-    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1; t2 takes about ten minutes
-                                          and several GB of memory)
+    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1; t2 takes a quarter of an hour
+                                          or so and several GB of memory; not timed)
 
 Needs the `skijack` and `aviary_kernel` packages. The programs are the level-1
 declarations of `tower` in SKIjack's corpus: an interpreter written in S, K, I run on a
@@ -11,8 +11,9 @@ quoted program (t0), on the quoted unquoter (t1) and on the quoted interpreter i
 
 For each program:
 - it is reduced by need until its root is a value, and the contractions are counted
-  beside the reference reducer's count for the same job; then again with its normal
-  subterms named (names.py), which must take the same number of contractions;
+  beside the reference reducer's count for the same job; then again with values built
+  directly, and with its normal subterms named as well (names.py). All three must take
+  the same number of contractions;
 - its answer is compared with the reference's. The answer is Scott-encoded, so it is read
   as SKIjack reads it: the program is applied to one atom for each constructor of its
   result type and reduced to normal form, on both machines, and the two normal forms must
@@ -66,9 +67,10 @@ def main(names):
         term = convert(p.term)
         print(f"{name}: to a value, the reference reducer takes {ref.steps} contractions ({ref.status.value})")
         counts = []
-        for label, named in (("as it is", False), ("normal subterms named", True)):
+        for label, named, direct in (("as applications", False, False), ("values built directly", False, True),
+                                     ("values built directly, normal subterms named", True, True)):
             main, defs = naming.name(term, 2) if named else (term, {})
-            net = Net.of(main, agents, rules, defs, named)
+            net = Net.of(main, agents, rules, defs, direct)
             start = time.time()
             net.head(10 ** 9, 6 * 10 ** 6)
             c = net.counts
@@ -76,7 +78,7 @@ def main(names):
             print(f"  by need, {label}: {c.get('contract', 0)} contractions, {c.get('collect', 0)} arguments taken, "
                   f"{c.get('copy', 0)} copies, {c.get('expand', 0)} expansions of {len(defs)} names; "
                   f"{net.fired} interactions in all; at most {net.most} nodes; {time.time() - start:.0f} s")
-        bad |= counts[0] != counts[1]
+        bad |= len(set(counts)) != 1
         marked, ours = p.term, convert(p.term)
         for i in range(len(p.result_type.ctors)):
             marked, ours = App(marked, Atom(f"m{i}")), (ours, i)
