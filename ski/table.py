@@ -7,7 +7,9 @@ A value is an agent whose principal port is an output (+); a consumer is one who
 principal port is an input (-). Checks:
 - there is exactly one rule for each consumer and value, and no other rule;
 - in each rule every auxiliary port of the pair is used exactly once, every new wire has
-  exactly two ends, and every connection the rule makes joins an output to an input.
+  exactly two ends, and every connection the rule makes joins an output to an input. (An
+  `expand` rule makes no connections here: the machine puts a term's output where the
+  value's was.)
 
 The second check is a typing of the rules. A net built from a term joins outputs to
 inputs only; if every rule keeps that, then the only pairs of principal ports that can ever
@@ -49,6 +51,7 @@ class Rule:
         self.left = self.right = None
         self.count = None
         self.nodes, self.links, self.line, self.text = [], [], 0, ""
+        self.expand = None  # the parameter naming the term to expand, for an `expand` rule
 
     def title(self):
         show = lambda s: s[0] + (" " + s[1] if s[1] else "") + (" (" + " ".join(s[2]) + ")" if s[2] else "")
@@ -91,6 +94,9 @@ def parse_term(toks, agents, rule, raw):
 def parse_body(text, agents, rule):
     raw = []
     toks = tokens(text)
+    if len(toks) == 2 and toks[0] == "expand":
+        rule.expand = toks[1]
+        return
     if toks != ["nothing"]:
         while toks:
             a = parse_term(toks, agents, rule, raw)
@@ -184,6 +190,11 @@ def check(agents, rules):
                 return outside[end[1]]
             return agents[r.nodes[end[1]][0]].ports[end[2]]
 
+        if r.expand:
+            # The consumer keeps its ports; the value must have none and carry the name.
+            if right.arity or r.expand != r.right[1]:
+                problems.append(f"line {r.line}: expand needs a value with no ports and its own parameter")
+            continue
         used = [e[1] for pair in r.links for e in pair if e[0] == "ext"]
         for letter in outside:
             if used.count(letter) != 1:

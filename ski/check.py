@@ -8,8 +8,9 @@
     check.py all              table, census, atoms and cases, with their defaults
 
 In the census, for every term with a leftmost-outermost normal form (tree reduction,
-within caps) reduction by need must stop and give that normal form. Reduction of every
-pair at once must give it too whenever it stops within its caps. Where the reference
+within caps) reduction by need must stop and give that normal form, and must do so again,
+in the same number of contractions, when the term's normal subterms are named (names.py).
+Reduction of every pair at once must give it too whenever it stops within its caps. Where the reference
 reducer `aviary_kernel` is installed, its number of contractions is compared with the
 number of `contract` rules applied by need (without it that line is not printed). By need
 must never take more contractions than the reference or than tree reduction; taking fewer
@@ -19,7 +20,8 @@ would catch a rule counted under the wrong name.
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import table
-from net import Net, Stop, parse, show
+from net import Net, Stop, parse, show, unfold
+import names
 
 ARITY = {"S": 3, "K": 2, "I": 1}
 
@@ -116,6 +118,7 @@ def census(label, leaves, n_max):
     ran = wrong = unstopped = skipped = 0
     every_ok = every_wrong = every_unstopped = 0
     same = fewer = more = 0
+    named_terms = 0
     worst = (0, 0, None)
     used = {}
     for n in range(1, n_max + 1):
@@ -147,6 +150,21 @@ def census(label, leaves, n_max):
             if need > steps:
                 wrong += 1
                 print("MORE CONTRACTIONS THAN TREE STEPS:", show(t))
+            # With its normal subterms named and values built directly: the same normal form
+            # in the same number of contractions.
+            main, defs = names.name(t, 2)
+            net = Net.of(main, agents, rules, defs, True)
+            try:
+                net.normalize(20000, 50000)
+                if unfold(main, defs) != t or net.read() != nf or net.counts.get("contract", 0) != need:
+                    wrong += 1
+                    print("WRONG with names:", show(t))
+            except Stop:
+                unstopped += 1
+                print("DID NOT STOP with names:", show(t))
+            named_terms += bool(defs)
+            for line, k in net.used.items():
+                used[line] = used.get(line, 0) + k
             if steps - need > worst[0] - worst[1]:
                 worst = (steps, need, t)
             net = Net.of(t, agents, rules)
@@ -163,6 +181,7 @@ def census(label, leaves, n_max):
                 every_unstopped += 1
     print(f"{label}, sizes <= {n_max}: {ran} terms with a normal form ({skipped} without one within the caps, not run)")
     print(f"  by need: {ran - wrong - unstopped} give it, {wrong} wrong, {unstopped} did not stop")
+    print(f"  by need with normal subterms named: the same normal forms and contraction counts ({named_terms} terms have something to name)")
     print(f"  all at once: {every_ok} give it, {every_wrong} wrong, {every_unstopped} did not stop within the caps")
     if ref:
         print(f"  contractions by need against the reference reducer's: equal for {same}, fewer for {fewer}, more for {more}")

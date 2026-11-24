@@ -14,6 +14,7 @@ agent S1    + -            # S x
 agent S2    + - -          # S x y
 agent atom  +  param k     # an inert constant, numbered k: stands for an unknown
 agent stuck + - -          # a term whose head is an atom, applied: stuck(head argument)
+agent ref   +  param k     # a reference to the term named k, which is closed and in normal form
 
 # Consumers: the principal port is an input, and waits for a value.
 agent app   - - +          # application: (function) (argument result)
@@ -24,7 +25,10 @@ agent era   -              # eraser: (term)
 #   => equations between ports, separated by ";". A letter bound on the left is that
 #      port; any other letter is a new wire and occurs exactly twice; `agent (x y)` is a
 #      new node and stands for its principal port. `nothing`: the pair vanishes.
-#   count contract | collect | copy | erase
+#      `expand k`: the value is replaced by a new copy of the term named k, and the
+#      consumer stays as it is. This is the one form that is not a net; it is what the
+#      IVM does when a reference to a net meets a combinator of label 0.
+#   count contract | collect | copy | erase | expand
 #
 # A contraction of the calculus (I x -> x, K x y -> x, S x y z -> x z (y z)) is exactly one
 # application of a rule counted `contract`. `collect` is a value taking an argument it
@@ -64,6 +68,10 @@ rule app (x r) >< stuck (h a)
   => r = stuck (stuck (h a) x)
   count collect
 
+rule app (x r) >< ref k
+  => expand k
+  count expand
+
 # --- duplication: one node at a time, its arguments left shared ---------------------------
 
 rule dup (p q) >< S
@@ -98,6 +106,11 @@ rule dup (p q) >< stuck (h x)
   => p = stuck (a c); q = stuck (b d); h = dup (a b); x = dup (c d)
   count copy
 
+# A reference is copied as a name: the term it names is not touched.
+rule dup (p q) >< ref k
+  => p = ref k; q = ref k
+  count copy
+
 # --- erasure ------------------------------------------------------------------------------
 
 rule era >< S
@@ -130,4 +143,8 @@ rule era >< atom k
 
 rule era >< stuck (h x)
   => h = era; x = era
+  count erase
+
+rule era >< ref k
+  => nothing
   count erase

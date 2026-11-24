@@ -11,7 +11,8 @@ quoted program (t0), on the quoted unquoter (t1) and on the quoted interpreter i
 
 For each program:
 - it is reduced by need until its root is a value, and the contractions are counted
-  beside the reference reducer's count for the same job;
+  beside the reference reducer's count for the same job; then again with its normal
+  subterms named (names.py), which must take the same number of contractions;
 - its answer is compared with the reference's. The answer is Scott-encoded, so it is read
   as SKIjack reads it: the program is applied to one atom for each constructor of its
   result type and reduced to normal form, on both machines, and the two normal forms must
@@ -20,6 +21,7 @@ For each program:
 import os, pathlib, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import table
+import names as naming
 from net import Net, Stop, show
 
 try:
@@ -61,13 +63,20 @@ def main(names):
     for name in names:
         p = program.level1[name]
         ref = run_level1(p, CAP)
-        net = Net.of(convert(p.term), agents, rules)
-        start = time.time()
-        net.head(10 ** 9, 5 * 10 ** 6)
-        c = net.counts
-        print(f"{name}: to a value, the reference reducer takes {ref.steps} contractions ({ref.status.value}); "
-              f"by need {c.get('contract', 0)} contractions, {c.get('collect', 0)} arguments taken, "
-              f"{c.get('copy', 0)} copies; at most {net.most} nodes; {time.time() - start:.0f} s")
+        term = convert(p.term)
+        print(f"{name}: to a value, the reference reducer takes {ref.steps} contractions ({ref.status.value})")
+        counts = []
+        for label, named in (("as it is", False), ("normal subterms named", True)):
+            main, defs = naming.name(term, 2) if named else (term, {})
+            net = Net.of(main, agents, rules, defs, named)
+            start = time.time()
+            net.head(10 ** 9, 6 * 10 ** 6)
+            c = net.counts
+            counts.append(c.get("contract", 0))
+            print(f"  by need, {label}: {c.get('contract', 0)} contractions, {c.get('collect', 0)} arguments taken, "
+                  f"{c.get('copy', 0)} copies, {c.get('expand', 0)} expansions of {len(defs)} names; "
+                  f"{net.fired} interactions in all; at most {net.most} nodes; {time.time() - start:.0f} s")
+        bad |= counts[0] != counts[1]
         marked, ours = p.term, convert(p.term)
         for i in range(len(p.result_type.ctors)):
             marked, ours = App(marked, Atom(f"m{i}")), (ours, i)

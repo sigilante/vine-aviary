@@ -6,7 +6,9 @@ schedules, and terms of S, K, I and atoms read into and out of nets.
 
 TERM is in prefix form: a backtick applies the next two terms; S, K, I; a digit is an atom.
 
-A term is "S", "K", "I", an int (an atom), or a pair (function, argument).
+A term is "S", "K", "I", an int (an atom), a `Ref` (a reference to a named term), or a
+pair (function, argument). Named terms are given to the net as `defs` (names.py makes
+them); each must be closed and in normal form, so expanding one twice repeats no work.
 
 Schedules:
 - `run_all`: every active pair, in rounds, until none is left. This is how the IVM reduces.
@@ -33,10 +35,36 @@ class Stop(Exception):
     """A cap was reached."""
 
 
+class Ref:
+    """A reference to the term named k."""
+    __slots__ = ("k",)
+
+    def __init__(self, k):
+        self.k = k
+
+    def __eq__(self, other):
+        return isinstance(other, Ref) and other.k == self.k
+
+    def __hash__(self):
+        return hash(("ref", self.k))
+
+    def __repr__(self):
+        return f"Ref({self.k})"
+
+
+ARITY = {"S": 3, "K": 2, "I": 1}
+PARTIAL = {("S", 1): "S1", ("S", 2): "S2", ("K", 1): "K1"}
+
+
 class Net:
-    def __init__(self, agents=None, rules=None):
+    def __init__(self, agents=None, rules=None, defs=None, direct=False):
         if agents is None:
             agents, rules = table.load(table.default_path())
+        self.defs = defs or {}   # name -> term
+        # direct: a combinator short of arguments is built as the value it is (S a b as
+        # S2(a b)), not as applications that will make that value. This saves `collect`
+        # interactions and changes no contraction.
+        self.direct = direct
         self.agents = agents
         self.rules = {(r.left[0], r.right[0]): r for r in rules}
         self.kind, self.param, self.link = {}, {}, {}
@@ -77,21 +105,53 @@ class Net:
                 box[at] = (self.new(t), 0)
             elif isinstance(t, int):
                 box[at] = (self.new("atom", t), 0)
-            else:
+            elif isinstance(t, Ref):
+                box[at] = (self.new("ref", t.k), 0)
+            elif not self.direct:
                 a = self.new("app")
                 ports = [None, None]
-                pending.append((a, ports))
+                pending.append((a, 0, 2, ports))
                 box[at] = (a, 2)
                 work.append((t[0], ports, 0))
                 work.append((t[1], ports, 1))
-        for a, ports in pending:
-            self.wire((a, 0), ports[0])
-            self.wire((a, 1), ports[1])
-        return result[0]
+            else:
+                head, args = t, []
+                while isinstance(head, tuple):
+                    args.append(head[1])
+                    head = head[0]
+                args.reverse()
+                take = 0
+                if isinstance(head, str):
+                    take = min(len(args), ARITY[head] - 1)
+                if take:
+                    v = self.new(PARTIAL[(head, take)])
+                    ports = [None] * take
+                    pending.append((v, 1, take, ports))
+                    for i in range(take):
+                        work.append((args[i], ports, i))
+                    out = (v, 0)
+                else:
+                    slot = [None]
+                    work.append((head, slot, 0))
+                    out = slot
+                # The remaining arguments: applications, or `stuck` under an atom.
+                for x in args[take:]:
+                    n = self.new("stuck" if isinstance(head, int) else "app")
+                    ports = [None, None]
+                    pending.append((n, 1 if isinstance(head, int) else 0, 2, ports))
+                    ports[0] = out
+                    work.append((x, ports, 1))
+                    out = (n, 0) if isinstance(head, int) else (n, 2)
+                box[at] = out
+        resolve = lambda p: resolve(p[0]) if isinstance(p, list) else p
+        for n, first, count, ports in pending:
+            for i in range(count):
+                self.wire((n, first + i), resolve(ports[i]))
+        return resolve(result[0])
 
     @classmethod
-    def of(cls, term, agents=None, rules=None):
-        net = cls(agents, rules)
+    def of(cls, term, agents=None, rules=None, defs=None, direct=False):
+        net = cls(agents, rules, defs, direct)
         net.root = (net.new("root"), 0)
         net.wire(net.root, net.encode(term))
         return net
@@ -105,6 +165,10 @@ class Net:
     def fire(self, c, v):
         """The consumer c meets the value v on their principal ports."""
         rule = self.rules[(self.kind[c], self.kind[v])]
+        if rule.expand:
+            self.expand((c, 0))
+            self.used[rule.line] = self.used.get(rule.line, 0) + 1
+            return
         outside, params = {}, {}
         for node, (_, param, aux) in ((c, rule.left), (v, rule.right)):
             if param:
@@ -122,6 +186,19 @@ class Net:
             self.wire(port(a), port(b))
         self.counts[rule.count] = self.counts.get(rule.count, 0) + 1
         self.used[rule.line] = self.used.get(rule.line, 0) + 1
+        self.fired += 1
+        if len(self.kind) > self.most:
+            self.most = len(self.kind)
+
+    def expand(self, port):
+        """The reference joined to the input `port` is replaced by a new copy of the
+        term it names."""
+        v = self.link[port][0]
+        term = self.defs[self.param.pop(v)]
+        del self.link[(v, 0)]
+        del self.kind[v]
+        self.wire(port, self.encode(term))
+        self.counts["expand"] = self.counts.get("expand", 0) + 1
         self.fired += 1
         if len(self.kind) > self.most:
             self.most = len(self.kind)
@@ -156,6 +233,12 @@ class Net:
         stack = [port]
         while stack:
             n, i = self.link[stack[-1]]
+            if self.kind[n] == "ref" and len(stack) == 1:
+                # The value wanted is a reference: nothing consumes it, so the cursor
+                # expands it. (Below the top, the consumer waiting on it decides: an
+                # application expands it, a duplicator copies the name.)
+                self.expand(stack[-1])
+                continue
             if self.is_value(n):
                 stack.pop()
                 continue
@@ -243,6 +326,8 @@ class Net:
             kind = self.kind[n]
             if kind == "atom":
                 box[at] = self.param[n]
+            elif kind == "ref":
+                box[at] = unfold(Ref(self.param[n]), self.defs)
             elif kind in ("S", "K", "I"):
                 box[at] = kind
             elif kind in ("K1", "S1"):
@@ -267,6 +352,33 @@ class Net:
             else:
                 raise ValueError((kind, i))
         return result[0]
+
+
+def unfold(term, defs):
+    """The term with every reference replaced by the term it names."""
+    memo = {}
+
+    def named(k):
+        if k not in memo:
+            memo[k] = plain(defs[k])
+        return memo[k]
+
+    def plain(t):
+        # Named terms nest only as deep as the program's own nesting of arguments.
+        if isinstance(t, Ref):
+            return named(t.k)
+        if isinstance(t, tuple):
+            stack, spine = t, []
+            while isinstance(stack, tuple):
+                spine.append(stack[1])
+                stack = stack[0]
+            out = plain(stack)
+            for x in reversed(spine):
+                out = (out, plain(x))
+            return out
+        return t
+
+    return plain(term)
 
 
 def parse(text):
