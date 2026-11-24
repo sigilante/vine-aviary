@@ -3,24 +3,26 @@
 
     graph_check.py census [N]          every term of S, K, I up to size N (default 6), and
                                        with two atoms up to size 5
-    graph_check.py skijack [t0 ...]    programs of SKIjack's `tower` (default t0 t1)
+    graph_check.py skijack [t0 ...] [--need]    programs of SKIjack's `tower` (default t0 t1)
 
 Needs VINE and IVM (the vine and ivm binaries; default: on the path). The program is
 built once (`vine build bench/graph.vi --lib skivine`) and given a term on each line.
 
 census: each term with a normal form (tree reduction, within caps) must print it, and the
-contractions the machine reports are compared with those of reduction by need on the table
+contractions the machine reports must equal those of reduction by need on the table
 machine (ski/net.py).
 
 skijack (needs the skijack and aviary_kernel packages): each program is reduced until its
-head is a value, and its contractions are printed beside the reference reducer's and the
-table machine's by need; then the program applied to one atom for each constructor of its
-result is reduced to normal form, which must be the reference's.
+head is a value, and its contractions must equal the table machine's by need; the
+reference reducer's count is printed beside them. For t2 the table machine is run only
+with --need (minutes, and several GB). Then the program applied to one atom for each
+constructor of its result is reduced to normal form, which must be the reference's.
 """
 import os, re, subprocess, sys, tempfile, time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "ski"))
 import table
+import names as naming
 from net import Net, Stop, show
 from check import terms, lo_normal_form
 
@@ -67,6 +69,8 @@ def census(n_max):
     with tempfile.TemporaryDirectory() as directory:
         out, stats, seconds = run(build(directory), [show(t) for t, _, _ in todo])
     wrong = same = fewer = more = 0
+    if len(out) < 2 * len(todo):
+        sys.exit(f"the program printed {len(out)} lines for {len(todo)} terms")
     for i, (t, nf, need) in enumerate(todo):
         got, count = out[2 * i], int(out[2 * i + 1].split()[1])
         if got != nf:
@@ -79,7 +83,7 @@ def census(n_max):
           f"{len(todo)} terms with a normal form, {wrong} wrong")
     print(f"  contractions against reduction by need on the table machine: equal for {same}, fewer for {fewer}, more for {more}")
     print(f"  {stats.get('Total', 0)} IVM interactions in {seconds:.0f} s")
-    return wrong
+    return wrong or fewer or more
 
 
 def skijack_programs(names):
@@ -109,7 +113,16 @@ def skijack_programs(names):
             out2, stats2, seconds2 = run(built, [show(ours)])
             ok = out2[0] == want
             bad |= not ok
-            print(f"{name}: to a value, {count} contractions on the IVM (the reference reducer: {ref.steps}); "
+            if name == "t2" and "--need" not in sys.argv:
+                need = "not run here: it takes minutes and GBs; --need runs it"
+            else:
+                main, defs = naming.name(term, 2)
+                net = Net.of(main, agents, rules, defs, True)
+                net.head(10 ** 9, 6 * 10 ** 6)
+                need = net.counts.get("contract", 0)
+                bad |= need != count
+            print(f"{name}: to a value, {count} contractions on the IVM (by need on the table machine: {need}; "
+                  f"the reference reducer: {ref.steps}); "
                   f"{places} places in the store; {stats.get('Total', 0)} IVM interactions, "
                   f"{stats.get('Total', 0) // max(count, 1)} for each contraction; heap {stats.get('Heap', 0) // 2 ** 20} MB; {seconds:.0f} s")
             print(f"  answer, applied to {len(p.result_type.ctors)} atoms: {out2[0][:60]}{'...' if len(out2[0]) > 60 else ''}; "
@@ -122,5 +135,5 @@ if __name__ == "__main__":
     if mode == "census":
         sys.exit(bool(census(int(sys.argv[2]) if len(sys.argv) > 2 else 6)))
     if mode == "skijack":
-        sys.exit(bool(skijack_programs(sys.argv[2:] or ["t0", "t1"])))
+        sys.exit(bool(skijack_programs([a for a in sys.argv[2:] if a != "--need"] or ["t0", "t1"])))
     sys.exit("usage: graph_check.py census [N] | skijack [t0 ...]")

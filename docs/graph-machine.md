@@ -19,10 +19,13 @@ sequential.
 
 ## Results
 
-`VINE=... IVM=... python3 ref/graph_check.py census 6`: all 81,641 terms with a normal form
-(S, K, I to size 6; with two atoms as well, to size 5, which includes the first family's
-terms up to that size) print it. For every one the machine reports exactly the number of
-contractions that reduction by need takes on the table machine of `ski/`.
+`VINE=... IVM=... python3 ref/graph_check.py census 6`: 81,641 runs, of every term with a
+normal form by tree reduction within the script's caps (S, K, I to size 6; with two atoms
+as well, to size 5, so the S, K, I terms up to size 5 are run twice). Each prints its
+normal form, and the machine reports exactly the number of contractions that reduction by
+need takes on the table machine of `ski/`; the script fails if any differs. A reviewer
+found the same on 14,000 random terms of sizes 7 to 40 and on Church numerals raised to
+one another (runs not kept).
 
 `python3 ref/graph_check.py skijack t0 t1 t2`: the level-1 programs of SKIjack's `tower`.
 Each is reduced until its head is a value; then, applied to one atom for each constructor
@@ -35,29 +38,34 @@ of its result, to normal form, which equals the reference reducer's in all three
 | t2 | 314,309 | 504,930 | 349,456 | 1,147,105,497 | 3,649 | 30 MB | 83 s |
 
 The contraction counts are those of reduction by need on the table machine (323, 63,520,
-314,309), which that machine reached with 765 to 15 million copies; here there are none.
-Times are single runs on a machine doing other work.
+314,309; the script checks the first two, and the third with `--need`, which was not
+run). That machine reached them with 2,702 to 31 million copies, or 765 to 15 million with
+normal subterms named (`ski-system.md`; its t2 figures are from runs by hand). Here there
+are none. Interactions, heap and times are from single runs on one machine doing other
+work; the t2 row was run once.
 
 ## What it costs, and what it is not
 
-- **About 3,000 IVM interactions for each contraction**, rising slowly with the size of the
-  store, since each look into the array walks a tree. The IVM's own counts for these runs
-  include reading the term.
+- **About 3,000 IVM interactions for each contraction** on these programs (a reviewer saw
+  1,700 to 4,000 on others), rising slowly with the size of the store; probably because
+  each look into the array walks a tree, which was not measured. The IVM's counts include
+  reading the term.
 - **Nothing is ever freed.** A place, once used, stays: the store only grows (349,456 places
   for t2). A collector is not written.
-- **It is sequential.** Depth was not measured; there is nothing here for a second worker
-  to do.
+- **It is sequential** as written: one cursor. Depth was not measured, and I did not look
+  for anything a second worker could do.
 - **Reading a result back unfolds sharing**, so a normal form with much sharing prints
-  long (t2's answer applied to atoms is some 189,000 characters).
-- **The printer prints atoms 0 to 9**, and `parse` reads anything that is not a backtick,
-  `S`, `K` or `I` as an atom.
+  long (t2's answer applied to atoms was some 189,000 characters in a run by hand).
+- **No input is refused.** `parse` reads any character that is not a backtick, `S`, `K` or
+  `I` as an atom, fills out a term cut short with `I`, and ignores what follows a complete
+  term; an atom prints as the character 48 more than its number.
 - It is tested, not proved, and on the programs above.
 
 ## Against the other ways in this repository
 
 | | Stops whenever a normal form exists | Shares work | SKIjack's t1 | Where the strategy lives |
 |---|---|---|---|---|
-| `ski.vi`, `ski/ski.rules` with every pair fired | no | yes | does not stop | nowhere: everything fires |
-| `lazy.vi`, `ski/lazy.rules` with every pair fired | yes | no | does not finish | in the net, as demand agents |
-| `ski/ski.rules` by need | yes | yes | 63,520 contractions, 2 million interactions | in the reducer, which the IVM is not |
-| `graph.vi` | yes | yes | 63,520 contractions, 200 million IVM interactions | in the program, with a store |
+| `ski.vi`, `ski/ski.rules` with every pair fired | no | yes | not tried; t0 does not stop by `ski.rules` | nowhere: everything fires |
+| `lazy.vi`, `ski/lazy.rules` with every pair fired | yes, on the terms tested | no | does not finish by `lazy.rules` | in the net, as demand agents |
+| `ski/ski.rules` by need | yes, on the terms tested | yes | 63,520 contractions, 2.1 million interactions (1.1 million with names) | in the reducer, which the IVM is not |
+| `graph.vi` | yes, on the terms tested | yes | 63,520 contractions, 200 million IVM interactions | in the program, with a store |

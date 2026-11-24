@@ -55,6 +55,7 @@ pub mod Graph {
     at
   }
 
+  /// What is at a place. (A place beyond the store reads as `I`; none is ever asked for.)
   fn .node(&Graph(nodes, _): &Graph, at: N32) -> Node {
     nodes.get(at).or_use(Node::I())
   }
@@ -63,7 +64,8 @@ pub mod Graph {
     nodes.at(at).assume().* = node;
   }
 
-  /// The argument of the application at a place.
+  /// The argument of the application at a place. (For a place that is not an application,
+  /// the place itself; `whnf` only asks of applications.)
   fn .argument(&self: &Graph, at: N32) -> N32 {
     match self.node(at) {
       Node::App(_, x) { x }
@@ -72,7 +74,9 @@ pub mod Graph {
   }
 
   /// Reads a term in prefix form into the store and returns its place: a backtick
-  /// applies the next two terms; `S`, `K`, `I`; a digit is an atom.
+  /// applies the next two terms; `S`, `K`, `I`; a digit is an atom. Nothing is refused:
+  /// any other character is an atom too (numbered by its code less 48), a term cut short
+  /// is filled out with `I`, and what follows a complete term is left unread.
   pub fn .parse(&self: &Graph, &chars: &List[Char]) -> N32 {
     let c = chars.pop_front().or_use('I');
     when {
@@ -89,7 +93,8 @@ pub mod Graph {
   }
 
   /// Reduces the term at `root` until its head is a combinator short of arguments, or an
-  /// atom. The place `root` then holds that term (perhaps through pointers).
+  /// atom. The place `root` then holds that term (perhaps through pointers). Does not
+  /// return if the term never comes to such a head.
   pub fn .whnf(&self: &Graph, root: N32) {
     // The applications on the spine, the innermost first.
     let spine = [];
@@ -157,7 +162,9 @@ pub mod Graph {
   }
 
   /// Prints the normal form of the term at a place, in prefix form: its head is reduced,
-  /// then each argument in turn. Sharing is not kept in what is printed.
+  /// then each argument in turn. Sharing is not kept in what is printed. Does not return
+  /// if the term has no normal form. An atom prints as the character 48 more than its
+  /// number: a digit for 0 to 9.
   pub fn .print(&self: &Graph, root: N32, &io: &IO) {
     self.whnf(root);
     let arguments = [];

@@ -35,7 +35,7 @@ python3 ref/check.py birds 3      # all 49 birds; about 6 min
 python3 ref/check.py rules        # every rule fired once
 python3 ref/check.py lazy 5       # normal order, with Y; about 1 min
 python3 ref/check.py monsters
-IVM=/path/to/ivm python3 ref/graph_check.py census 6        # the graph reducer; about 15 s
+IVM=/path/to/ivm python3 ref/graph_check.py census 6        # the graph reducer; about 10 s; needs VINE set too
 IVM=/path/to/ivm python3 ref/graph_check.py skijack t0 t1   # needs skijack and aviary_kernel; t2 takes some minutes
 python3 tools/gen_combinators.py  # regenerate skivine/combinators.vi
 echo '```B S K I' | vine run bench/birds.vi --lib skivine --no-stats

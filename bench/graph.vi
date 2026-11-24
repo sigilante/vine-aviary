@@ -3,8 +3,9 @@ use #skivine::graph::Graph;
 
 /// Reads one term per line (prefix form; a digit is an atom) and reduces it by graph
 /// reduction with a store. For each line it prints the normal form, then a line
-/// `contractions N places M`. A line that begins with `!` is only reduced until its head
-/// is a value, and only the second line is printed.
+/// `contractions N places M`. A line that begins with `!` is reduced only until its head
+/// is a value: no term is printed, only the `contractions` line. No line is refused
+/// (`Graph::parse`): an empty one is `I`.
 pub fn main(&io: &IO) {
   while io.read_line() is Option::Some(line) {
     let chars = line as List[Char];

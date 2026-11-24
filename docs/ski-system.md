@@ -287,6 +287,8 @@ that is evaluated on the first demand from either of two holders.
 - Reduction by need, with shared work, has its cursor in the reducer. What runs on the
   IVM is `ski.rules` on terms that stop when every pair fires, or `lazy.rules` on any
   term with a normal form but without shared work, which SKIjack's t1 is too large for.
+  The exception is not a rule table at all: `skivine/graph.vi`, a graph reducer with a
+  store, runs t1 and t2 on the IVM with shared work (`graph-machine.md`).
 - The lowering uses the IVM's N32 values and its branch, which are extrinsic to the
   combinators; a lowering to combinators alone is not attempted.
 - The lowered programs print atoms 0 to 9 only, and a term whose arguments nest more than
