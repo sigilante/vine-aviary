@@ -2,7 +2,9 @@
 """A net machine for an interaction system given as a table (table.py), with two
 schedules, and terms of S, K, I and atoms read into and out of nets.
 
-    net.py [--all] TERM      reduce TERM by need, or with --all every pair at once
+    net.py TERM              reduce TERM by ski.rules, by need
+    net.py --all TERM        by ski.rules, every pair at once
+    net.py --demand TERM     by lazy.rules, every pair at once
 
 TERM is in prefix form: a backtick applies the next two terms; S, K, I; a digit is an atom.
 
@@ -460,12 +462,18 @@ def show(t):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    every = "--all" in args
-    args = [a for a in args if a != "--all"]
-    net = Net.of(parse(args[0] if args else sys.stdin.read()))
+    every, demand = "--all" in args, "--demand" in args
+    args = [a for a in args if a not in ("--all", "--demand")]
+    if len(args) != 1:
+        sys.exit("usage: net.py [--all | --demand] TERM")
+    if demand:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lazy.rules")
+        net = Net.of(parse(args[0]), *table.load(path))
+    else:
+        net = Net.of(parse(args[0]))
     rounds = None
     try:
-        rounds = net.run_all() if every else net.normalize()
+        rounds = net.run_all() if every or demand else net.normalize()
         print(show(net.read()))
     except Stop:
         print("stopped at a cap")
