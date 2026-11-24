@@ -1,23 +1,34 @@
 #!/usr/bin/env python3
 """The lowering of ski: to the IVM's agents (ivy.py), run on the IVM itself.
 
-    ivm_check.py [N] [--names]     (IVM: the ivm binary; default `ivm` on the path)
+    ivm_check.py [N] [--names] [--demand]     (IVM: the ivm binary; default `ivm` on the path)
+    ivm_check.py --skijack [t0 ...]           (needs skijack and aviary_kernel)
 
-Every term of S, K, I and two atoms up to size N (default 5) on which reducing every pair
-at once stops (net.py's `run_all`, within caps) is lowered, 500 terms to a program, and run
-by `ivm run`. Each printed line must be the normal form `run_all` gives, and the IVM must
-raise no error flag. With --names the terms' normal subterms are named first (names.py),
-so references to nets are exercised; the answers must be the same.
+Every term of S, K, I and two atoms up to size N (default 5) is lowered, 500 terms to a
+program, and run by `ivm run`. Each printed line must be the term's normal form, and the
+IVM must raise no error flag.
+
+- Without --demand the table is ski.rules. The terms are those on which reducing every
+  pair at once stops (net.py's `run_all`, within caps), and the normal form is `run_all`'s.
+- With --demand the table is lazy.rules, which carries the demand in the net. The terms
+  are all those with a normal form by tree reduction, including the ones that do not stop
+  under ski.rules, and the table machine's `run_all` must give that normal form too.
+- With --names the terms' subterms are named first (names.py), so references to nets are
+  exercised: normal subterms without --demand, every subterm with it.
 
 Also printed: the IVM's interactions beside the table machine's for the same terms. The
 IVM's count includes starting each term and printing its answer; that part is measured by
 running the answers alone and taken off.
+
+--skijack runs programs of SKIjack's `tower` on the IVM by lazy.rules, with every subterm
+named: the program applied to one atom for each constructor of its result must print the
+normal form the reference reducer gives.
 """
 import os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import table, names, ivy
 from net import Net, Stop, show
-from check import terms
+from check import terms, lo_normal_form
 
 IVM = os.environ.get("IVM", "ivm")
 KINDS = ("Total", "Annihilate", "Commute", "Copy", "Erase", "Graft", "Extrinsic")
@@ -35,11 +46,16 @@ def run_ivm(program, directory):
     return r.stdout.split("\n"), stats, "Error" in r.stderr, r.stderr
 
 
-def main(n_max, named):
-    agents, rules = table.load(table.default_path())
+def table_for(demand):
+    here = os.path.dirname(os.path.abspath(__file__))
+    return table.load(os.path.join(here, "lazy.rules" if demand else "ski.rules"))
+
+
+def main(n_max, named, demand):
+    agents, rules = table_for(demand)
     memo, batch, want = {}, [], []
     ran = skipped = wrong = 0
-    ours = dict.fromkeys(("contract", "collect", "copy", "erase", "expand"), 0)
+    ours = {}
     theirs = dict.fromkeys(KINDS, 0)
     printing = dict.fromkeys(KINDS, 0)
 
@@ -52,14 +68,14 @@ def main(n_max, named):
         for t in batch:
             if named:
                 # Each term's names are kept apart by numbering them from where the last stopped.
-                main, d = names.name(t, 2)
+                main, d = names.name(t, 2, demand)
                 shift = len(defs) and max(defs) + 1
                 move = lambda u: ivy.Ref(u.k + shift) if isinstance(u, ivy.Ref) else ((move(u[0]), move(u[1])) if isinstance(u, tuple) else u)
                 defs.update({k + shift: move(v) for k, v in d.items()})
                 mains.append(move(main))
             else:
                 mains.append(t)
-        lines, stats, error, log = run_ivm(ivy.lower(ivy.emit(mains, defs), agents, rules), directory)
+        lines, stats, error, log = run_ivm(ivy.lower(ivy.emit(mains, defs, demand), agents, rules), directory)
         if error:
             wrong += len(batch)
             print("THE IVM RAISED A FLAG:", log[:300])
@@ -71,7 +87,7 @@ def main(n_max, named):
             theirs[k] += stats.get(k, 0)
         # The same answers lowered as they stand: nothing to reduce, only to print.
         from net import parse
-        _, stats, error, log = run_ivm(ivy.lower(ivy.emit([parse(w) for w in want]), agents, rules), directory)
+        _, stats, error, log = run_ivm(ivy.lower(ivy.emit([parse(w) for w in want], None, demand), agents, rules), directory)
         for k in KINDS:
             printing[k] += stats.get(k, 0)
         batch.clear()
@@ -80,22 +96,35 @@ def main(n_max, named):
     with tempfile.TemporaryDirectory() as directory:
         for n in range(1, n_max + 1):
             for t in terms(["S", "K", "I", 0, 1], n, memo):
+                if demand:
+                    nf, _ = lo_normal_form(t)
+                    if nf is None:
+                        skipped += 1
+                        continue
                 net = Net.of(t, agents, rules, direct=True)
                 try:
-                    net.run_all(20000, 50000)
+                    net.run_all(50000, 100000)
                 except Stop:
+                    if demand:
+                        wrong += 1
+                        print("DID NOT STOP on the table machine:", show(t))
                     skipped += 1
                     continue
+                if demand and net.read() != nf:
+                    wrong += 1
+                    print("WRONG on the table machine:", show(t))
                 ran += 1
-                for k in ours:
-                    ours[k] += net.counts.get(k, 0)
+                for k, v in net.counts.items():
+                    ours[k] = ours.get(k, 0) + v
                 batch.append(t)
                 want.append(show(net.read()))
                 if len(batch) == 500:
                     flush(directory)
         flush(directory)
-    print(f"S, K, I and two atoms, sizes <= {n_max}{', normal subterms named' if named else ''}: {ran} terms run on the IVM "
-          f"({skipped} do not stop all at once and are not run); {wrong} wrong")
+    which = "lazy.rules" if demand else "ski.rules"
+    why = "have no normal form within the caps" if demand else "do not stop all at once"
+    print(f"{which}; S, K, I and two atoms, sizes <= {n_max}{', subterms named' if named else ''}: {ran} terms run on the IVM "
+          f"({skipped} {why} and are not run); {wrong} wrong")
     total = sum(ours.values())
     print(f"  the table machine, all at once: {total} interactions ({', '.join(f'{k} {v}' for k, v in ours.items() if v)})")
     work = {k: theirs[k] - printing[k] for k in KINDS}
@@ -106,6 +135,38 @@ def main(n_max, named):
     return wrong
 
 
+def skijack_programs(which):
+    import pathlib
+    import skijack
+    from skijack.expand import expand_program
+    from skijack.parser import parse
+    from skijack.run import run_level0
+    from aviary_kernel.terms import App, Atom
+    from skijack_check import convert
+    agents, rules = table_for(True)
+    source = pathlib.Path(skijack.__file__).parent / "corpus" / "tower.ascii.ski"
+    program = expand_program(parse(source.read_text(encoding="utf-8"), "ascii"))
+    bad = 0
+    with tempfile.TemporaryDirectory() as directory:
+        for name in which:
+            p = program.level1[name]
+            marked, ours = p.term, convert(p.term)
+            for i in range(len(p.result_type.ctors)):
+                marked, ours = App(marked, Atom(f"m{i}")), (ours, i)
+            want = show(convert(run_level0(marked, 3_000_000, whnf_only=False).term))
+            main, defs = names.name(ours, 2, True)
+            lines, stats, error, log = run_ivm(ivy.lower(ivy.emit([main], defs, True), agents, rules), directory)
+            ok = lines[0] == want and not error
+            bad |= not ok
+            print(f"{name} on the IVM, applied to {len(p.result_type.ctors)} atoms: {lines[0][:60]}; "
+                  f"{'equal to' if ok else 'DIFFERENT FROM'} the reference's normal form; "
+                  f"{stats.get('Total', 0)} interactions ({', '.join(f'{k.lower()} {stats.get(k, 0)}' for k in KINDS[1:])})")
+    return bad
+
+
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--names"]
-    sys.exit(bool(main(int(args[0]) if args else 5, "--names" in sys.argv)))
+    flags = ("--names", "--demand", "--skijack")
+    args = [a for a in sys.argv[1:] if a not in flags]
+    if "--skijack" in sys.argv:
+        sys.exit(bool(skijack_programs(args or ["t0"])))
+    sys.exit(bool(main(int(args[0]) if args else 5, "--names" in sys.argv, "--demand" in sys.argv)))

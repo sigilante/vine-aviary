@@ -41,12 +41,25 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import table
 from net import Ref, parse as parse_term, ARITY, PARTIAL
 
-VALUES = ["S", "K", "I", "K1", "S1", "S2", "atom", "stuck"]   # the order is the tag
+# The values that are lowered to a tagged node; the order is the tag. `ap`, an application
+# not yet asked for, is one of them in a table that has it (lazy.rules).
+VALUES = ["S", "K", "I", "K1", "S1", "S2", "atom", "stuck", "ap"]
 TAG = {name: i for i, name in enumerate(VALUES)}
 NODE = {"S": "ski:s", "K": "ski:k", "I": "ski:i", "K1": "ski:k1", "S1": "ski:s1", "S2": "ski:s2",
-        "atom": "ski:atom", "stuck": "ski:stuck", "app": "ski:app", "dup": "ski:dup", "era": "ski:era",
-        "ref": "ski:ref"}
+        "atom": "ski:atom", "stuck": "ski:stuck", "ap": "ski:ap", "ref": "ski:ref",
+        "app": "ski:app", "ev": "ski:ev", "nf": "ski:nf", "dup": "ski:dup", "era": "ski:era"}
 AGENT = {v: k for k, v in NODE.items()}
+
+
+def tagged(agents):
+    return [v for v in VALUES if v in agents]
+
+
+def pack(kids):
+    """Several ports as one: nothing, the port itself, or a pair."""
+    if not kids:
+        return node("ivm:eraser")
+    return kids[0] if len(kids) == 1 else node("ivm:x", *kids)
 
 
 # ---------------------------------------------------------------------------------------
@@ -86,8 +99,9 @@ class Fresh:
         return f"{self.prefix}{self.n}"
 
 
-def term_net(term, fresh=None):
-    """The equations of a net whose free port is the term's output."""
+def term_net(term, fresh=None, lazy=False):
+    """The equations of a net whose free port is the term's output. With `lazy` an
+    application is the inert `ski:ap`, for a table that carries its demand in the net."""
     fresh = fresh or Fresh()
     eqs = []
 
@@ -111,6 +125,8 @@ def term_net(term, fresh=None):
         for a in args[take:]:
             if isinstance(head, int):
                 cur = node("ski:stuck", cur, out(a))
+            elif lazy:
+                cur = node("ski:ap", cur, out(a))
             else:
                 r = fresh()
                 eqs.append((cur, node("ski:app", out(a), r)))
@@ -121,12 +137,12 @@ def term_net(term, fresh=None):
     return eqs
 
 
-def emit(terms, defs=None):
+def emit(terms, defs=None, lazy=False):
     """ski: Ivy text: a net `ski:term:i` for each term and `ski:def:k` for each name."""
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 100000))
     try:
-        parts = [net_text(f"ski:term:{i}", term_net(t)) for i, t in enumerate(terms)]
-        parts += [net_text(f"ski:def:{k}", term_net(t)) for k, t in sorted((defs or {}).items())]
+        parts = [net_text(f"ski:term:{i}", term_net(t, lazy=lazy)) for i, t in enumerate(terms)]
+        parts += [net_text(f"ski:def:{k}", term_net(t, lazy=lazy)) for k, t in sorted((defs or {}).items())]
     except RecursionError:
         # The text is a tree as deep as the term's arguments nest, and it is written by
         # recursion: a few thousand levels is the most. Named terms nest one level each.
@@ -208,49 +224,45 @@ def n32(k):
     return node("ivm:n32", payload=k)
 
 
-def branches(prefix):
-    return node("ivm:branch", names=[f"{prefix}:{v.lower()}" for v in VALUES])
+def branches(prefix, values):
+    return node("ivm:branch", names=[f"{prefix}:{v.lower()}" for v in values])
 
 
-def dispatch(prefix, first, second, fresh):
+def dispatch(prefix, rest, fresh, values):
     """A consumer that takes a value apart and joins the net `prefix:VALUE` to the
-    value's payload and to two more ports."""
+    value's payload and to the consumer's own ports (`rest`, packed as one)."""
     p = fresh()
-    choose = node("ivm:ext:merge", branches(prefix), node("ivm:x", p, node("ivm:x", first, second)),
-                  names=["ivm:branch"])
+    choose = node("ivm:ext:merge", branches(prefix, values), node("ivm:x", p, rest), names=["ivm:branch"])
     return node("ivm:x", choose, p)
 
 
-def lower_tree(tree, fresh):
+def lower_tree(tree, fresh, values):
     """A ski: tree as an ivm: tree."""
     if isinstance(tree, str):
         return tree
     path, payload, names, kids = tree
-    kids = [lower_tree(k, fresh) for k in kids]
+    kids = [lower_tree(k, fresh, values) for k in kids]
     agent = AGENT[path]
-    if agent == "app":
-        return dispatch("ski:app", kids[0], kids[1], fresh)
     if agent == "dup":
         return node("ivm:y", *kids)
     if agent == "era":
         return node("ivm:eraser")
     if agent == "ref":
         return node("ivm:graft", names=names)
+    if agent not in values:
+        # A consumer that looks at what it meets: application, or a demand.
+        return dispatch(path, pack(kids), fresh, values)
     if agent == "atom":
         # The number is a literal in a term, and a wire in a rule (where it is `k`).
         held = n32(payload) if isinstance(payload, int) else payload
-    elif not kids:
-        held = node("ivm:eraser")
-    elif len(kids) == 1:
-        held = kids[0]
     else:
-        held = node("ivm:x", *kids)
+        held = pack(kids)
     return node("ivm:x", n32(TAG[agent]), held)
 
 
-def lower_net(eqs, fresh=None):
+def lower_net(eqs, values, fresh=None):
     fresh = fresh or Fresh("v")
-    return [(lower_tree(a, fresh), lower_tree(b, fresh)) for a, b in eqs]
+    return [(lower_tree(a, fresh, values), lower_tree(b, fresh, values)) for a, b in eqs]
 
 
 def rule_tree(toks, agents):
@@ -270,33 +282,27 @@ def rule_tree(toks, agents):
 
 
 def rule_nets(agents, rules):
-    """For each `app >< value` rule that is a net, the ivm: net that the branch picks:
-    its free port takes the value's payload, then the argument and the result."""
+    """For each rule of a consumer that looks at what it meets (application, a demand)
+    and a tagged value, the ivm: net that the branch picks: its free port takes the
+    value's payload, then the consumer's own ports."""
+    values = tagged(agents)
     out = []
     for r in rules:
-        if r.left[0] != "app" or r.expand:
+        if r.left[0] in ("dup", "era") or r.expand:
             continue
-        arg, result = r.left[2]
         _, param, aux = r.right
-        if param:
-            payload = param
-        elif not aux:
-            payload = node("ivm:eraser")
-        elif len(aux) == 1:
-            payload = aux[0]
-        else:
-            payload = node("ivm:x", *aux)
+        payload = param if param else pack(aux)
         fresh = Fresh("v")
-        eqs = [("^", node("ivm:x", payload, node("ivm:x", arg, result)))]
+        eqs = [("^", node("ivm:x", payload, pack(r.left[2])))]
         toks = table.tokens(r.text)
         while toks and toks != ["nothing"]:
             a = rule_tree(toks, agents)
             assert toks.pop(0) == "="
             b = rule_tree(toks, agents)
-            eqs.append((lower_tree(a, fresh), lower_tree(b, fresh)))
+            eqs.append((lower_tree(a, fresh, values), lower_tree(b, fresh, values)))
             if toks:
                 assert toks.pop(0) == ";"
-        out.append(net_text(f"ski:app:{r.right[0].lower()}", simplify(eqs)))
+        out.append(net_text(f"{NODE[r.left[0]]}:{r.right[0].lower()}", simplify(eqs)))
     return out
 
 
@@ -323,14 +329,15 @@ def print_char(code, io_in, io_out):
     return (io_in, node("ivm:ext:merge", n32(code) if isinstance(code, int) else code, io_out, names=["root:io:print_char"]))
 
 
-def show_nets():
+def show_nets(values):
     """Nets that print a value in prefix form: free port takes the payload, then the IO
-    value in and out. Written by hand; they are the host's business, not the system's."""
+    value in and out. Written by hand; they are the host's business, not the system's.
+    An application not yet asked for is asked for, and its value printed."""
     def shown(value, i, o, fresh):
-        return (value, dispatch("ski:show", i, o, fresh))
+        return (value, dispatch("ski:show", node("ivm:x", i, o), fresh, values))
 
     out = []
-    for name in VALUES:
+    for name in values:
         fresh = Fresh("v")
         eqs = []
         if name in ("S", "K", "I"):
@@ -347,6 +354,12 @@ def show_nets():
             payload = "k"
             eqs.append(("k", node("ivm:ext:merge", n32(48), "c", names=["vi:n32:add"])))
             eqs.append(print_char("c", "i", "o"))
+        elif name == "ap":
+            # f = ev (c); c = app (a d), and d is printed.
+            payload = node("ivm:x", "f", "a")
+            eqs.append(("f", lower_tree(node("ski:ev", "c"), fresh, values)))
+            eqs.append(("c", lower_tree(node("ski:app", "a", "d"), fresh, values)))
+            eqs.append(shown("d", "i", "o", fresh))
         else:
             payload = node("ivm:x", "x", "y")
             eqs += [print_char(96, "i", "a"), shown("x", "a", "b", fresh), shown("y", "b", "o", fresh)]
@@ -361,28 +374,31 @@ def lower(ski_text, agents=None, rules=None):
     if agents is None:
         agents, rules = table.load(table.default_path())
     nets = read(ski_text)
+    values = tagged(agents)
     parts = []
     count = sum(1 for n in nets if n.startswith("ski:term:"))
     fresh = Fresh("m")
     eqs, io = [], "io0"
     for i in range(count):
         mid, after = fresh(), fresh()
-        eqs.append((node("ivm:graft", names=[f"ski:term:{i}"]), dispatch("ski:show", io, mid, fresh)))
+        eqs.append((node("ivm:graft", names=[f"ski:term:{i}"]), dispatch("ski:show", node("ivm:x", io, mid), fresh, values)))
         eqs.append(print_char(10, mid, after))
         io = after
     eqs.insert(0, ("^", node("ivm:x", "io0", io)))
     parts.append(net_text("iv:main", eqs))
     for name, body in nets.items():
-        parts.append(net_text(name, lower_net(body)))
+        parts.append(net_text(name, lower_net(body, values)))
     parts += rule_nets(agents, rules)
-    parts += show_nets()
+    parts += show_nets(values)
     return "\n".join(parts)
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[1] not in ("emit", "lower"):
-        sys.exit("usage: ivy.py emit|lower TERM...")
+        sys.exit("usage: ivy.py emit|lower [--demand] TERM...")
     mode, texts = sys.argv[1], sys.argv[2:]
-    terms = [parse_term(t) for t in texts]
-    ski = emit(terms)
-    print(ski if mode == "emit" else lower(ski))
+    demand = "--demand" in texts
+    terms = [parse_term(t) for t in texts if t != "--demand"]
+    ski = emit(terms, lazy=demand)
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lazy.rules" if demand else "ski.rules")
+    print(ski if mode == "emit" else lower(ski, *table.load(path)))

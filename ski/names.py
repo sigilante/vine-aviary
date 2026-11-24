@@ -2,7 +2,7 @@
 """Names the static parts of a term, so that a net copies a name where it would have
 copied a structure.
 
-    main, defs = names.name(term, least=2)
+    main, defs = names.name(term, least=2, any_term=False)
 
 Every subterm of a closed term of S, K and I is itself closed, so any of them can be a
 definition. A subterm is named when it is an application in argument position (or the
@@ -13,6 +13,10 @@ its term, in which named arguments are again references; `main` is the term so r
 Only normal forms are named, on purpose. A reference is expanded afresh at each use, so
 naming a term that still has work in it would repeat the work at every use, and reduction
 by need would lose its sharing. A normal form has no work in it to repeat.
+
+With `any_term` every such application is named, in normal form or not. That is right for
+a system that does not share work in the first place (lazy.rules): there a term not yet
+asked for is copied whole, and a name is cheaper to copy.
 """
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -21,7 +25,7 @@ from net import ARITY, Ref
 BIG = 10 ** 9
 
 
-def name(term, least=2):
+def name(term, least=2, any_term=False):
     # Equal subterms get one number (hash-consing), children before parents.
     number, info = {}, []   # info[n] = (leaf or None, f, a, size, normal, head, nargs)
     by_id = {}
@@ -57,7 +61,7 @@ def name(term, least=2):
         by_id[id(t)] = number[key]
     root = by_id[id(term)] if isinstance(term, tuple) else number[term]
 
-    named = lambda n: info[n][0] is None and info[n][4] and info[n][3] >= least
+    named = lambda n: info[n][0] is None and (any_term or info[n][4]) and info[n][3] >= least
     inline, defs = [None] * len(info), {}
     for n, (leaf, f, a, *_rest) in enumerate(info):
         if leaf is not None:

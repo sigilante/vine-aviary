@@ -18,7 +18,7 @@ State: an experiment. The results are tests, not proofs.
 | `ref/check.py` | The checks for the Vine programs: `census`, `ski`, `birds`, `rules`, `monsters` |
 | `ref/snet.py`, `census.py`, `extra.py` | The Python net simulator for pure S and its census, copied from the SKI research notes |
 | `docs/inets-pure-S.md` | The note that defines the six-rule system (a copy, dated 2026-11-21) |
-| `ski/`, `docs/ski-system.md` | The `ski:` interaction system: S, K, I as agents, declared as a table of 27 typed rules, with a machine that reduces all at once or by need, checked against tree reduction and against programs compiled by SKIjack; named nets; Ivy text; and a lowering to the IVM's own agents, run on the IVM |
+| `ski/`, `docs/ski-system.md` | The `ski:` interaction system: S, K, I as agents, declared as a table of 27 typed rules, with a machine that reduces all at once or by need, checked against tree reduction and against programs compiled by SKIjack; named nets; Ivy text; a lowering to the IVM's own agents, run on the IVM; and a second table that carries the demand in the net, by which a program compiled by SKIjack runs on the IVM |
 | `NOTES.md` | Results, limits, status log |
 
 ## Run
@@ -43,9 +43,10 @@ and `aviary_kernel` packages, and `ivm_check.py` an `ivm` binary:
 
 ```sh
 python3 ski/table.py                  # the table and its typing
-python3 ski/check.py all              # about 10 s; `census 7` takes a minute or two
+python3 ski/check.py all              # about 40 s; `census 7` and `demand 7` take a minute or two each
 python3 ski/skijack_check.py t0 t1    # t2 adds a quarter of an hour or so and several GB
-IVM=/path/to/ivm python3 ski/ivm_check.py   # the lowering on the IVM; add --names
+IVM=/path/to/ivm python3 ski/ivm_check.py   # the lowering on the IVM; add --names, --demand
+IVM=/path/to/ivm python3 ski/ivm_check.py --skijack t0   # a SKIjack program on the IVM
 ```
 
 Terms are in prefix form: a backtick applies the next two terms. `ski.vi` reads the

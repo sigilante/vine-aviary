@@ -8,6 +8,7 @@ evaluation that `NOTES.md` lists as wanted.
 | File | Holds |
 |---|---|
 | `ski/ski.rules` | The system: 12 agents, 27 rules |
+| `ski/lazy.rules` | The same with the demand carried in the net: 15 agents, 50 rules |
 | `ski/table.py` | Reads the table and checks it |
 | `ski/net.py` | A net machine driven by the table, with two schedules |
 | `ski/check.py` | Census against tree reduction and the reference reducer |
@@ -175,11 +176,68 @@ that the difference is exactly the reduction has not been checked by hand. An ap
 call (the branch) and one expansion of a net: 66,255 of each, the number of contractions
 and arguments taken together.
 
-**What does not run on the IVM: SKIjack's programs.** The IVM fires every pair, and all at
-once t0 does not stop: in a run by hand on the table machine it was still going after two
-million interactions, where by need it takes 3,407, or 1,403 with names. t1 and t2 were
-not tried. An interpreter that recurses needs the demand carried in the net, which is not
-written.
+**What does not run on the IVM by `ski.rules`: SKIjack's programs.** The IVM fires every
+pair, and all at once t0 does not stop: in a run by hand on the table machine it was still
+going after two million interactions, where by need it takes 3,407, or 1,403 with names.
+An interpreter that recurses needs the demand carried in the net: the next section.
+
+## The demand carried in the net
+
+`lazy.rules` is a second table. An application in a term is an inert node, `ap`, and
+nothing happens to it until a demand reaches it. A demand is an agent, `ev`, sent to a
+term's output; where it meets an `ap` it turns it into the `app` of `ski.rules` and goes
+on to the function. So every `app` in a net is there because its result was asked for.
+An S step asks for `x z` and leaves `y z` as an `ap`; an eraser discards an `ap` without
+running it. A second demand agent, `nf`, asks for the whole normal form. The cursor of
+"by need" above has become an agent, and a machine that fires every pair does only
+wanted work.
+
+**It does not share work.** A duplicator that meets an `ap` copies it as it stands, and
+each copy is evaluated by whoever asks: call by name. A term that is already a value is
+copied as a value.
+
+`python3 ski/check.py demand 7` (a minute and a half), every pair fired:
+
+- All 370,153 terms with a normal form (S, K, I to size 7, and with two atoms to size 5)
+  stop and give it, including the 13 that never stop under `ski.rules`. Each is run as
+  applications, with values built directly, and with every subterm named.
+- Each takes exactly as many contractions as leftmost-outermost tree reduction takes
+  steps. This table is normal order without shared work, to the step.
+- Two rules are never applied, and I believe cannot be: an `app` meeting a reference or an
+  `ap`. A demand sends on only values, so an `app` only ever meets one.
+
+`ivy.py` lowers this table as it does the other (`--demand`): `ap` becomes one more tagged
+value, and the nets for `ev`, `nf` and `app` are generated from the table.
+`IVM=... python3 ski/ivm_check.py 5 --demand`: the 47,155 terms give their normal forms on
+the IVM, with and without names; 486,885 interactions on the table machine (338,420 of
+them a demand arriving at a value), 1,119,767 on the IVM for reduction alone, 2.3 each.
+
+**SKIjack's t0 runs on the IVM** (`ivm_check.py --skijack t0`): applied to two atoms it
+prints `` `1`K``S`KKK ``, the reference reducer's normal form, in 60,797 IVM interactions
+with no error flag. On the table machine, to a value (a run by hand, not kept):
+
+| t0, every pair fired | Contractions | Copies | Erasures | Interactions in all | Most nodes |
+|---|---|---|---|---|---|
+| values built directly | 340 | 336,720 | 329,908 | 667,577 | 116,291 |
+| normal subterms named | 340 | 38,185 | 37,448 | 76,786 | 13,530 |
+| every subterm named | 340 | 12,009 | 11,823 | 25,022 | 4,299 |
+
+The 340 contractions are the reference reducer's count for t0. I have not looked into
+whether that is more than a coincidence of this program.
+
+**t1 does not finish.** With every subterm named, a run by hand was stopped at 13.6 million
+interactions and 3 million nodes, having made 789 contractions and 8.3 million copies. An
+unevaluated term is copied whole, at once, whether or not the copy is ever asked for, and
+copies of copies compound.
+
+**Why not by need in the net.** Sharing work needs a term that is evaluated on the first
+demand from either of two holders. This is my own argument, not checked against the
+literature (I recall papers on token-passing nets, by Sinot, that claim call by need, and
+have not reread them): an agent has one principal port and can be reached only through
+it, so for two holders both to reach one shared cell the cell's principal port would
+have to face both, along one wire. A net with fixed wiring cannot do that; a reducer that
+chooses which pairs to fire can, which is what the cursor does. Forcing a shared term as
+soon as it is shared is no way out: `Y f` then unfolds without end.
 
 ## What this shows
 
@@ -200,9 +258,9 @@ written.
 ## Limits
 
 - Tests on small terms and three programs; no simulation theorem.
-- The cursor is in the reducer. A machine that fires every pair, as the IVM does, needs
-  the demand carried in the net; that is not written, so on the IVM only terms that stop
-  when every pair fires can be run.
+- Reduction by need, with shared work, has its cursor in the reducer. What runs on the
+  IVM is `ski.rules` on terms that stop when every pair fires, or `lazy.rules` on any
+  term with a normal form but without shared work, which SKIjack's t1 is too large for.
 - The lowering uses the IVM's N32 values and its branch, which are extrinsic to the
   combinators; a lowering to combinators alone is not attempted.
 - The lowered programs print atoms 0 to 9 only, and a term whose arguments nest more than

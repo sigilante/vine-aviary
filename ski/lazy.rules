@@ -1,0 +1,250 @@
+# The ski: system with the demand carried in the net.
+#
+# In ski.rules an application is a consumer: it fires as soon as its function is a value,
+# wanted or not. Here an application in a term is an inert node, `ap`, and nothing happens
+# until a demand reaches it. A demand is an agent, `ev`, sent to a term's output; where it
+# meets an `ap` it becomes an `app`, the consumer of ski.rules, and goes on to the function.
+# So every `app` in a net is there because its result was asked for, and a machine that
+# fires every pair does only wanted work.
+#
+# What this does not have is sharing of work. A duplicator that meets an `ap` copies it
+# unevaluated, so each copy is evaluated by whoever asks: call by name. A term that is
+# already a value is still copied as a value, not evaluated again.
+#
+# Notation as in ski.rules.
+
+# Values.
+agent S     +
+agent K     +
+agent I     +
+agent K1    + -
+agent S1    + -
+agent S2    + - -
+agent atom  +  param k
+agent stuck + - -
+agent ref   +  param k
+# An application not yet asked for: (function argument). Inert, like a value.
+agent ap    + - -
+
+# Consumers.
+agent ev    - +            # a demand: (term) (where its value is to go)
+agent nf    - +            # a demand for the whole normal form, not just a value
+agent app   - - +          # an application under demand: (function) (argument result)
+agent dup   - + +
+agent era   -
+
+# --- a demand meets a term ----------------------------------------------------------------
+
+rule ev (o) >< ap (f a)
+  => f = ev (c); c = app (a o)
+  count demand
+
+rule ev (o) >< S
+  => o = S
+  count arrive
+
+rule ev (o) >< K
+  => o = K
+  count arrive
+
+rule ev (o) >< I
+  => o = I
+  count arrive
+
+rule ev (o) >< K1 (x)
+  => o = K1 (x)
+  count arrive
+
+rule ev (o) >< S1 (x)
+  => o = S1 (x)
+  count arrive
+
+rule ev (o) >< S2 (x y)
+  => o = S2 (x y)
+  count arrive
+
+rule ev (o) >< atom k
+  => o = atom k
+  count arrive
+
+rule ev (o) >< stuck (h x)
+  => o = stuck (h x)
+  count arrive
+
+rule ev (o) >< ref k
+  => expand k
+  count expand
+
+# --- a demand for the normal form: the value, then each of its arguments -------------------
+
+rule nf (o) >< ap (f a)
+  => f = ev (c); c = app (a d); d = nf (o)
+  count demand
+
+rule nf (o) >< S
+  => o = S
+  count arrive
+
+rule nf (o) >< K
+  => o = K
+  count arrive
+
+rule nf (o) >< I
+  => o = I
+  count arrive
+
+rule nf (o) >< K1 (x)
+  => o = K1 (a); x = nf (a)
+  count arrive
+
+rule nf (o) >< S1 (x)
+  => o = S1 (a); x = nf (a)
+  count arrive
+
+rule nf (o) >< S2 (x y)
+  => o = S2 (a b); x = nf (a); y = nf (b)
+  count arrive
+
+rule nf (o) >< atom k
+  => o = atom k
+  count arrive
+
+rule nf (o) >< stuck (h x)
+  => o = stuck (a b); h = nf (a); x = nf (b)
+  count arrive
+
+rule nf (o) >< ref k
+  => expand k
+  count expand
+
+# --- an application under demand: its result is wanted, so what it leaves is asked for -----
+
+rule app (x o) >< I
+  => x = ev (o)
+  count contract
+
+rule app (x o) >< K
+  => o = K1 (x)
+  count collect
+
+rule app (y o) >< K1 (x)
+  => y = era; x = ev (o)
+  count contract
+
+rule app (x o) >< S
+  => o = S1 (x)
+  count collect
+
+rule app (y o) >< S1 (x)
+  => o = S2 (x y)
+  count collect
+
+# S x y z -> x z (y z): x is asked for; (y z) is left as an `ap`, not asked for.
+rule app (z o) >< S2 (x y)
+  => z = dup (p q); x = ev (c); c = app (p d); d = app (ap (y q) o)
+  count contract
+
+rule app (x o) >< atom k
+  => o = stuck (atom k x)
+  count collect
+
+rule app (x o) >< stuck (h a)
+  => o = stuck (stuck (h a) x)
+  count collect
+
+rule app (x o) >< ref k
+  => expand k
+  count expand
+
+# An application under demand always receives a value, since a demand sends on only
+# values; this rule is here so that every pair has one. It asks, then applies.
+rule app (x o) >< ap (f a)
+  => f = ev (c); c = app (a d); d = app (x o)
+  count demand
+
+# --- duplication ------------------------------------------------------------------------
+
+rule dup (p q) >< S
+  => p = S; q = S
+  count copy
+
+rule dup (p q) >< K
+  => p = K; q = K
+  count copy
+
+rule dup (p q) >< I
+  => p = I; q = I
+  count copy
+
+rule dup (p q) >< K1 (x)
+  => p = K1 (a); q = K1 (b); x = dup (a b)
+  count copy
+
+rule dup (p q) >< S1 (x)
+  => p = S1 (a); q = S1 (b); x = dup (a b)
+  count copy
+
+rule dup (p q) >< S2 (x y)
+  => p = S2 (a c); q = S2 (b d); x = dup (a b); y = dup (c d)
+  count copy
+
+rule dup (p q) >< atom k
+  => p = atom k; q = atom k
+  count copy
+
+rule dup (p q) >< stuck (h x)
+  => p = stuck (a c); q = stuck (b d); h = dup (a b); x = dup (c d)
+  count copy
+
+rule dup (p q) >< ref k
+  => p = ref k; q = ref k
+  count copy
+
+# An application not yet asked for is copied as it stands: its work will be done by each
+# copy that is asked. This is where sharing of work is lost.
+rule dup (p q) >< ap (f x)
+  => p = ap (a c); q = ap (b d); f = dup (a b); x = dup (c d)
+  count copy
+
+# --- erasure ----------------------------------------------------------------------------
+
+rule era >< S
+  => nothing
+  count erase
+
+rule era >< K
+  => nothing
+  count erase
+
+rule era >< I
+  => nothing
+  count erase
+
+rule era >< K1 (x)
+  => x = era
+  count erase
+
+rule era >< S1 (x)
+  => x = era
+  count erase
+
+rule era >< S2 (x y)
+  => x = era; y = era
+  count erase
+
+rule era >< atom k
+  => nothing
+  count erase
+
+rule era >< stuck (h x)
+  => h = era; x = era
+  count erase
+
+rule era >< ref k
+  => nothing
+  count erase
+
+# An application nobody asked for is discarded without being run.
+rule era >< ap (f x)
+  => f = era; x = era
+  count erase

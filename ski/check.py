@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Checks of the ski: system (ski.rules) and its machine (net.py).
 
-    check.py table            the table is complete and its rules are typed
+    check.py table            the tables are complete and their rules are typed
     check.py census [N]       every term of S, K, I up to size N (default 6)
     check.py atoms [N]        the same with two atoms among the leaves (default 5)
     check.py cases            a few named terms
-    check.py all              table, census, atoms and cases, with their defaults
+    check.py demand [N]       lazy.rules, the demand carried in the net (default 6)
+    check.py all              all of the above, with their defaults
 
 In the census, for every term with a leftmost-outermost normal form (tree reduction,
 within caps) reduction by need must stop and give that normal form, and must do so again,
@@ -264,14 +265,58 @@ def cases():
     return bad
 
 
+LAZY = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lazy.rules")
+
+
+def demand(n_max):
+    """lazy.rules, which carries the demand in the net, with every pair fired: every term
+    with a normal form must stop and give it, in exactly as many contractions as
+    leftmost-outermost tree reduction takes steps."""
+    agents, rules = table.load(LAZY)
+    memo, used = {}, {}
+    ran = wrong = skipped = 0
+    for leaves, top in ((["S", "K", "I"], n_max), (["S", "K", "I", 0, 1], min(n_max, 5))):
+        for n in range(1, top + 1):
+            for t in terms(leaves, n, memo.setdefault(len(leaves), {})):
+                nf, steps = lo_normal_form(t)
+                if nf is None:
+                    skipped += 1
+                    continue
+                ran += 1
+                main, defs = names.name(t, 2, True)
+                for term, d, direct in ((t, {}, False), (t, {}, True), (main, defs, True)):
+                    net = Net.of(term, agents, rules, d, direct)
+                    try:
+                        net.run_all(50000, 100000)
+                    except Stop:
+                        wrong += 1
+                        print("DID NOT STOP:", show(t))
+                        continue
+                    if net.read() != nf or net.counts.get("contract", 0) != steps:
+                        wrong += 1
+                        print("WRONG:", show(t), show(net.read()), net.counts.get("contract", 0), steps)
+                    for line, k in net.used.items():
+                        used[line] = used.get(line, 0) + k
+    print(f"lazy.rules, every pair fired; S, K, I to size {n_max} and with two atoms to size {min(n_max, 5)}: {ran} terms with a "
+          f"normal form ({skipped} without one within the caps, not run), each as applications, with values built directly, "
+          f"and with every subterm named: {wrong} wrong")
+    print("  each stops with its normal form in as many contractions as tree reduction takes steps" if not wrong else "  see above")
+    unused = [r.title() for r in rules if r.line not in used]
+    print("  rules never applied: " + ("; ".join(unused) if unused else "none"))
+    return wrong
+
+
 def check_table():
-    agents, rules = table.load(table.default_path())
-    problems = table.check(agents, rules)
-    values = sum(1 for a in agents.values() if a.value)
-    print(f"table: {len(agents)} agents ({values} values, {len(agents) - values} consumers), {len(rules)} rules, {len(problems)} problems")
-    for p in problems:
-        print("  PROBLEM:", p)
-    return len(problems)
+    bad = 0
+    for path in (table.default_path(), LAZY):
+        agents, rules = table.load(path)
+        problems = table.check(agents, rules)
+        values = sum(1 for a in agents.values() if a.value)
+        print(f"{os.path.basename(path)}: {len(agents)} agents ({values} values, {len(agents) - values} consumers), {len(rules)} rules, {len(problems)} problems")
+        for p in problems:
+            print("  PROBLEM:", p)
+        bad += len(problems)
+    return bad
 
 
 if __name__ == "__main__":
@@ -286,4 +331,6 @@ if __name__ == "__main__":
         rc |= bool(census("S, K, I and two atoms", ["S", "K", "I", 0, 1], n or 5))
     if mode in ("cases", "all"):
         rc |= bool(cases())
+    if mode in ("demand", "all"):
+        rc |= bool(demand(n or 6))
     sys.exit(rc)

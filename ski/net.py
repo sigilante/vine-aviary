@@ -61,6 +61,9 @@ class Net:
         if agents is None:
             agents, rules = table.load(table.default_path())
         self.defs = defs or {}   # name -> term
+        # A table with an inert application, `ap`, carries its demand in the net
+        # (lazy.rules): terms are built with `ap`, and the root asks for a normal form.
+        self.lazy = "ap" in agents
         # direct: a combinator short of arguments is built as the value it is (S a b as
         # S2(a b)), not as applications that will make that value. This saves `collect`
         # interactions and changes no contraction.
@@ -108,10 +111,10 @@ class Net:
             elif isinstance(t, Ref):
                 box[at] = (self.new("ref", t.k), 0)
             elif not self.direct:
-                a = self.new("app")
+                a = self.new("ap" if self.lazy else "app")
                 ports = [None, None]
-                pending.append((a, 0, 2, ports))
-                box[at] = (a, 2)
+                pending.append((a, 1 if self.lazy else 0, 2, ports))
+                box[at] = (a, 0) if self.lazy else (a, 2)
                 work.append((t[0], ports, 0))
                 work.append((t[1], ports, 1))
             else:
@@ -136,12 +139,13 @@ class Net:
                     out = slot
                 # The remaining arguments: applications, or `stuck` under an atom.
                 for x in args[take:]:
-                    n = self.new("stuck" if isinstance(head, int) else "app")
+                    inert = isinstance(head, int) or self.lazy
+                    n = self.new("stuck" if isinstance(head, int) else "ap" if self.lazy else "app")
                     ports = [None, None]
-                    pending.append((n, 1 if isinstance(head, int) else 0, 2, ports))
+                    pending.append((n, 1 if inert else 0, 2, ports))
                     ports[0] = out
                     work.append((x, ports, 1))
-                    out = (n, 0) if isinstance(head, int) else (n, 2)
+                    out = (n, 0) if inert else (n, 2)
                 box[at] = out
         resolve = lambda p: resolve(p[0]) if isinstance(p, list) else p
         for n, first, count, ports in pending:
@@ -153,7 +157,12 @@ class Net:
     def of(cls, term, agents=None, rules=None, defs=None, direct=False):
         net = cls(agents, rules, defs, direct)
         net.root = (net.new("root"), 0)
-        net.wire(net.root, net.encode(term))
+        if net.lazy:
+            ask = net.new("nf")
+            net.wire((ask, 0), net.encode(term))
+            net.wire(net.root, (ask, 1))
+        else:
+            net.wire(net.root, net.encode(term))
         return net
 
     # --- one interaction --------------------------------------------------------------
@@ -340,14 +349,14 @@ class Net:
                 work.append(("go", self.link[(n, 2)], pair, 1))
                 work.append(("pair", inner, pair, 0))
                 work.append(("go", self.link[(n, 1)], inner, 1))
-            elif kind == "stuck" or (kind == "app" and i == 2):
+            elif kind in ("stuck", "ap") or (kind == "app" and i == 2):
                 pair = [None, None]
-                first = (n, 1) if kind == "stuck" else (n, 0)
-                second = (n, 2) if kind == "stuck" else (n, 1)
+                first = (n, 1) if kind != "app" else (n, 0)
+                second = (n, 2) if kind != "app" else (n, 1)
                 work.append(("pair", pair, box, at))
                 work.append(("go", self.link[second], pair, 1))
                 work.append(("go", self.link[first], pair, 0))
-            elif kind == "dup" and i in (1, 2):
+            elif (kind == "dup" and i in (1, 2)) or (kind in ("ev", "nf") and i == 1):
                 work.append(("go", self.link[(n, 0)], box, at))
             else:
                 raise ValueError((kind, i))
