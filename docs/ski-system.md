@@ -7,19 +7,22 @@ evaluation that `NOTES.md` lists as wanted.
 
 | File | Holds |
 |---|---|
-| `ski/ski.rules` | The system: 11 agents, 24 rules |
+| `ski/ski.rules` | The system: 12 agents, 27 rules |
 | `ski/table.py` | Reads the table and checks it |
 | `ski/net.py` | A net machine driven by the table, with two schedules |
 | `ski/check.py` | Census against tree reduction and the reference reducer |
 | `ski/skijack_check.py` | Programs compiled by SKIjack, against its reference reducer |
+| `ski/names.py` | Names the normal subterms of a term, to be references to nets |
+| `ski/ivy.py` | The system as Ivy text, and its lowering to the IVM's own agents |
+| `ski/ivm_check.py` | The lowering run on the IVM itself |
 
 Everything here is a test, not a proof.
 
 ## The system
 
-Eight values: `S`, `K`, `I`; the partial applications `K1(x)`, `S1(x)`, `S2(x y)`; an inert
-`atom` with a number; and `stuck(head argument)`, a term whose head is an atom. Three
-consumers: `app` (application, waiting on its function), `dup` (waiting on the term it
+Nine values: `S`, `K`, `I`; the partial applications `K1(x)`, `S1(x)`, `S2(x y)`; an inert
+`atom` with a number; `stuck(head argument)`, a term whose head is an atom; and `ref`, a
+reference to a named term (below). Three consumers: `app` (application, waiting on its function), `dup` (waiting on the term it
 copies) and `era`. There is one rule for each consumer and value:
 
 ```
@@ -49,7 +52,7 @@ changes no answer and is caught by nothing.
 - **By need** (`normalize`, `head`): a cursor starts at the root and fires a pair only
   when it is waiting on it. An application fires when its result is asked for; a
   duplicator, when one of its copies is asked for, so a shared term is evaluated once.
-  The cursor lives in the reducer, not in the net: the rules are the same 24.
+  The cursor lives in the reducer, not in the net: the rules are the same.
 
 Reduction by need never fires an eraser, so the machine removes what the root cannot reach
 (`Net.sweep`), and replaces a duplicator that has lost one copy by a wire. That is
@@ -72,7 +75,7 @@ reviewer's run, not kept) and on the terms in `check.py cases`.
   nodes) are as many as `NOTES.md` records for `strict`, its model of the IVM, at this
   size, and the first is the same term, `S I I (S I (S K))`. By need they stop: `K I Ω`
   gives `I` in two interactions.
-- Every one of the 24 rules is applied in the two censuses together.
+- Every rule is applied in the two censuses together.
 - A term used twice is evaluated once: an argument that costs 6 contractions, passed to
   `S I I`, costs 9 in all by need and 15 by tree reduction.
 - **Contractions against the reference reducer** (`aviary_kernel`, normal order on a
@@ -94,6 +97,74 @@ constructor of its result, reduced to normal form on both machines).
 
 t2 takes about six and a half minutes here, in Python, and several GB.
 
+## Named nets
+
+Every subterm of a closed term of S, K and I is closed, so any of them can be made a
+definition. `names.py` names each application in argument position that is in normal form,
+and the term then holds references in their place. A reference has three rules: applied,
+it is replaced by a new copy of the term it names; duplicated, the name is copied and the
+term is not touched; erased, it vanishes. These are what the IVM does with a reference to
+a net at a label-0 combinator, a label-1 combinator and an eraser.
+
+Only normal forms are named. A reference is expanded afresh at each use, so naming a term
+with work left in it would repeat the work; a normal form has none. The census checks
+this: with names, every term gives the same normal form in the same number of
+contractions (19,144 of the size-6 terms have something to name).
+
+On SKIjack's programs, by need, with every normal subterm of 2 leaves or more named and
+values built directly (`python3 ski/skijack_check.py`; the t2 row was run once by hand):
+
+| Program | Contractions | Copies, unnamed | Copies, named | Expansions | Interactions in all, unnamed | named | Most nodes, unnamed | named |
+|---|---|---|---|---|---|---|---|---|
+| t0 | 323 | 2,702 | 765 | 190 | 3,407 | 1,403 | 3,859 | 1,097 |
+| t1 | 63,520 | 2,030,766 | 970,591 | 37,805 | 2,125,278 | 1,098,665 | 408,263 | 223,566 |
+| t2 | 314,309 | 31,013,168 | 15,383,081 | 188,463 | (not recorded) | 16,019,609 | 8,631,616 | 4,835,397 |
+
+Naming halves the copying on the larger two and leaves the contractions exactly as they
+were. Naming larger pieces only (4, 8, 32 leaves) does worse on t1. What is left, about
+15 copies for each contraction on t1 and 49 on t2, is copying of values made while the
+program runs, which no name can stand for: an S step shares its third argument, and when
+both uses are wanted the argument is copied node by node.
+
+## Ivy text and the IVM
+
+`ivy.py` writes a term as a net of the `ski:` system in Ivy, Vine's text for nets
+(`ski:s2(x y)`, `ski:app(argument result)`, `ski:ref[name]` and so on), and lowers that
+text to the IVM's own system, agent by agent, as Vine lowers its own:
+
+| `ski:` | `ivm:` |
+|---|---|
+| a value | a label-0 combinator holding a tag (an N32) and a payload |
+| `dup` | a label-1 combinator |
+| `era` | the eraser |
+| `ref` | a reference to a net |
+| `app` | a label-0 combinator that takes the value apart, and the IVM's branch on the tag, which picks the net for that value's rule |
+
+The nets for the rules are not written by hand: each `app >< value` rule of `ski.rules`
+is lowered, right-hand side and all, by that same table. The duplication, erasure and
+reference rules are not lowered at all. The claim is that the IVM's own commutation,
+erasure and treatment of references do to the lowered nodes what those rules say.
+
+`IVM=/path/to/ivm python3 ski/ivm_check.py`: all 47,155 terms of S, K, I and two atoms up
+to size 5 are lowered and run by `ivm run`, and each prints the normal form the table
+machine gives, with no error flag; the same again with their normal subterms named.
+
+| | Interactions |
+|---|---|
+| The table machine, every pair at once | 90,176 (43,076 contractions, 23,179 arguments taken, 4,775 copies, 19,146 erasures) |
+| The IVM, reduction alone | 445,134: 4.9 for each of the table machine's |
+| The IVM, with names | 482,809: 5.4 |
+
+Starting each term and printing its answer cost the IVM another 1,945,110, measured by
+running the answers alone and taken off. An application rule costs the IVM one extrinsic
+call (the branch) and one expansion of a net: 66,255 of each, the number of contractions
+and arguments taken together.
+
+**What does not run on the IVM: SKIjack's programs.** The IVM fires every pair, and all at
+once t0 does not stop (two million interactions on the table machine, still going; by need
+it takes 1,403). An interpreter that recurses needs the demand carried in the net, which
+is not written.
+
 ## What this shows
 
 1. **Call by need needs nothing added to the system.** The same typed rules give strict,
@@ -108,15 +179,17 @@ t2 takes about six and a half minutes here, in Python, and several GB.
    partial application; a net cannot, because an application consumes the node it meets,
    so a value used twice is copied node by node. An interpreter that recurses by copying
    itself pays this on every turn. This is the main thing a lowering to the IVM has to
-   deal with. Named nets, which are expanded where needed and never copied, are the
-   first thing I would try; that is untried.
+   deal with. Named nets halve it (above); the rest is copying of run-time values.
 
 ## Limits
 
 - Tests on small terms and three programs; no simulation theorem.
 - The cursor is in the reducer. A machine that fires every pair, as the IVM does, needs
-  the demand carried in the net; that is not written.
-- Nothing here runs on the IVM or is written in Ivy text.
+  the demand carried in the net; that is not written, so on the IVM only terms that stop
+  when every pair fires can be run.
+- The lowering uses the IVM's N32 values and its branch, which are extrinsic to the
+  combinators; a lowering to combinators alone is not attempted.
+- The lowered programs print atoms 0 to 9 only.
 - The machine is a reference in Python (t1's two million interactions take about ten
   seconds), and its sweeping of unreachable nodes is its own business, not part of the
   system. Reducing all at once rescans every node each round and is slow on long terms.

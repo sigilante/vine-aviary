@@ -2,8 +2,8 @@
 """Programs compiled by SKIjack, run on the ski: system by need and compared with
 SKIjack's reference reducer.
 
-    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1; t2 takes about six and a half
-                                          minutes and several GB of memory)
+    skijack_check.py [t0 t1 t2 ...]      (default: t0 t1; t2 takes about ten minutes
+                                          and several GB of memory)
 
 Needs the `skijack` and `aviary_kernel` packages. The programs are the level-1
 declarations of `tower` in SKIjack's corpus: an interpreter written in S, K, I run on a
