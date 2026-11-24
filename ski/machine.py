@@ -54,8 +54,9 @@ class Net(inets.Net):
 
 def run(term, schedule="need", definitions=None, direct=False, deep=True, sweep_above=20000,
         max_interactions=10 ** 6):
-    """As `inets.ski.run`, with the tables here and a `Net` that keeps the tallies above.
-    The schedule "lazy" is lazy.rules reduced in rounds."""
+    """`inets.ski.run` with the tables here (in place of its `table`) and a `Net` that keeps
+    the tallies above (in place of its `net_class`). The schedule "lazy" is lazy.rules
+    reduced in rounds."""
     if schedule not in ("need", "rounds", "lazy"):
         raise TermError('schedule is "need", "rounds" or "lazy"')
     lazy = schedule == "lazy"

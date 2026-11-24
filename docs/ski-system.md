@@ -14,7 +14,7 @@ follows:
 | `run_all` | `Net.reduce_in_rounds` |
 | `normalize`, `head` | `Net.reduce_by_need` (deep or not) |
 | `names.py` | `inets.ski.name_subterms`, which names every normal application (the old minimum of 2 leaves excluded nothing, since an application has at least 2) |
-| `Net.sweep` | `inets.Net.sweep` with `collapse=("dup",)` |
+| `Net.sweep` | `inets.Net.sweep`, which collapses the duplicator the tables declare (`agent dup - + + duplicator`; before inets 0.1.3, `collapse=("dup",)`) |
 
 Each kept check, rerun with the package, prints the same output as before, line for
 line, counts included:
@@ -26,8 +26,8 @@ line, counts included:
 - `ref/graph_check.py census 6` and `ref/graph_check.py skijack t0 t1`, which compare the
   graph reducer with the machine.
 
-The package needed one addition, `collapse`, which removes a duplicator that has lost a
-copy. Without it, the copies by need on t1 are 23,475,006, not 2,030,766. Not rerun: t2,
+The package needed one addition, duplicator collapse, which removes a duplicator that has
+lost a copy (since inets 0.1.3 a table declares which agents are duplicators). Without it, the copies by need on t1 are 23,475,006, not 2,030,766. Not rerun: t2,
 and the figures this note marks as runs by hand. The censuses take about twice as long as
 before, and t1 by need about four times as long (40 s against 11 s, timed one after the
 other on 2026-11-25), because the package is a general machine.
