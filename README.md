@@ -42,8 +42,8 @@ The `ski:` system's checks need only Python 3; `skijack_check.py` also needs the
 and `aviary_kernel` packages, and `ivm_check.py` an `ivm` binary:
 
 ```sh
-python3 ski/table.py                  # the table and its typing
-python3 ski/check.py all              # about 40 s; `census 7` and `demand 7` take a minute or two each
+python3 ski/table.py                  # the first table and its typing; `ski/lazy.rules` for the second
+python3 ski/check.py all              # a minute or two; `census 7` and `demand 7` take a few minutes each
 python3 ski/skijack_check.py t0 t1    # t2 adds a quarter of an hour or so and several GB
 IVM=/path/to/ivm python3 ski/ivm_check.py   # the lowering on the IVM; add --names, --demand
 IVM=/path/to/ivm python3 ski/ivm_check.py --skijack t0   # a SKIjack program on the IVM

@@ -8,18 +8,21 @@ evaluation that `NOTES.md` lists as wanted.
 | File | Holds |
 |---|---|
 | `ski/ski.rules` | The system: 12 agents, 27 rules |
-| `ski/lazy.rules` | The same with the demand carried in the net: 15 agents, 50 rules |
+| `ski/lazy.rules` | A second table, with the demand carried in the net: 15 agents, 50 rules |
 | `ski/table.py` | Reads the table and checks it |
 | `ski/net.py` | A net machine driven by the table, with two schedules |
 | `ski/check.py` | Census against tree reduction and the reference reducer |
 | `ski/skijack_check.py` | Programs compiled by SKIjack, against its reference reducer |
-| `ski/names.py` | Names the normal subterms of a term, to be references to nets |
-| `ski/ivy.py` | The system as Ivy text, and its lowering to the IVM's own agents |
+| `ski/names.py` | Names subterms, to be references to nets: the normal ones, or all of them |
+| `ski/ivy.py` | Either table as Ivy text, and its lowering to the IVM's own agents |
 | `ski/ivm_check.py` | The lowering run on the IVM itself |
 
 Everything here is a test, not a proof.
 
 ## The system
+
+This section and the next four are about the first table, `ski.rules`. The second,
+`lazy.rules`, has a section of its own.
 
 Nine values: `S`, `K`, `I`; the partial applications `K1(x)`, `S1(x)`, `S2(x y)`; an inert
 `atom` with a number; `stuck(head argument)`, a term whose head is an atom; and `ref`, a
@@ -196,25 +199,30 @@ wanted work.
 each copy is evaluated by whoever asks: call by name. A term that is already a value is
 copied as a value.
 
-`python3 ski/check.py demand 7` (a minute and a half), every pair fired:
+`python3 ski/check.py demand 7` (a few minutes), every pair fired:
 
-- All 370,153 terms with a normal form (S, K, I to size 7, and with two atoms to size 5)
-  stop and give it, including the 13 that never stop under `ski.rules`. Each is run as
+- All 322,998 terms of S, K, I to size 7 with a normal form, and all 47,155 with two atoms
+  as well to size 5 (which include the first family's 3,873 up to that size), stop and
+  give it, including the 13 that never stop under `ski.rules`. Each is run as
   applications, with values built directly, and with every subterm named.
 - Each takes exactly as many contractions as leftmost-outermost tree reduction takes
   steps. This table is normal order without shared work, to the step.
 - Two rules are never applied, and I believe cannot be: an `app` meeting a reference or an
-  `ap`. A demand sends on only values, so an `app` only ever meets one.
+  `ap`. A demand sends on only values, so an `app` only ever meets one. (A reviewer made
+  the machine raise an error if either fired, over some 6,000 random terms; neither did.
+  That is not a proof.)
 
 `ivy.py` lowers this table as it does the other (`--demand`): `ap` becomes one more tagged
 value, and the nets for `ev`, `nf` and `app` are generated from the table.
 `IVM=... python3 ski/ivm_check.py 5 --demand`: the 47,155 terms give their normal forms on
 the IVM, with and without names; 486,885 interactions on the table machine (338,420 of
-them a demand arriving at a value), 1,119,767 on the IVM for reduction alone, 2.3 each.
+them a demand arriving at a value), 1,119,767 on the IVM for reduction alone, 2.3 each
+(1,197,667 with names, 2.5 each against the same 486,885).
 
 **SKIjack's t0 runs on the IVM** (`ivm_check.py --skijack t0`): applied to two atoms it
 prints `` `1`K``S`KKK ``, the reference reducer's normal form, in 60,797 IVM interactions
-with no error flag. On the table machine, to a value (a run by hand, not kept):
+with no error flag. On the table machine, to a value (runs by hand, not kept; of the
+figures in this table only the 340 is printed by a kept script, as the reference's count):
 
 | t0, every pair fired | Contractions | Copies | Erasures | Interactions in all | Most nodes |
 |---|---|---|---|---|---|
@@ -225,24 +233,42 @@ with no error flag. On the table machine, to a value (a run by hand, not kept):
 The 340 contractions are the reference reducer's count for t0. I have not looked into
 whether that is more than a coincidence of this program.
 
-**t1 does not finish.** With every subterm named, a run by hand was stopped at 13.6 million
+**t1 does not finish** (t2 was not tried). With every subterm named, a run by hand, not
+kept, was stopped at 13.6 million
 interactions and 3 million nodes, having made 789 contractions and 8.3 million copies. An
 unevaluated term is copied whole, at once, whether or not the copy is ever asked for, and
 copies of copies compound.
 
-**Why not by need in the net.** Sharing work needs a term that is evaluated on the first
-demand from either of two holders. This is my own argument, not checked against the
-literature (I recall papers on token-passing nets, by Sinot, that claim call by need, and
-have not reread them): an agent has one principal port and can be reached only through
-it, so for two holders both to reach one shared cell the cell's principal port would
-have to face both, along one wire. A net with fixed wiring cannot do that; a reducer that
-chooses which pairs to fire can, which is what the cursor does. Forcing a shared term as
-soon as it is shared is no way out: `Y f` then unfolds without end.
+**Why not by need in the net, and what could do it instead.** Sharing work needs a term
+that is evaluated on the first demand from either of two holders.
+
+- *No local cell can do it.* Suppose a piece of net stands between the two copies and the
+  unevaluated term, is quiet (has no active pair) until a demand comes, and is touched by
+  the rest of the net only at the two copies. In a quiet net every node has one owner
+  among the free ports: follow its principal wire, which ends at a free port or at an
+  auxiliary port of a node whose owner it shares. A node can be consumed only after a
+  demand at its owner, by induction over the run, since an auxiliary port changes only when
+  its node is consumed. So nothing in the piece can be consumed both on a demand from one
+  copy alone and on a demand from the other alone, and the term's first contraction
+  consumes its root. This argument was mine in outline and was made exact by a reviewer;
+  it is a proof on paper, not mechanized. A piece that never goes quiet (one that polls) is
+  not covered; we believe that fails too.
+- *Forcing a term when it is shared* shares work but runs terms nobody wants. A reviewer
+  tried it (a table with one rule changed, not kept): `Y (K 0)` still stops, but `Y f` with
+  `f = S (K (K 0)) I` does not, nor does `S (K (K 0)) I Ω`, though all three stop here.
+- *A net that is its own reducer* is not ruled out. If a single token is the only active
+  thing, the token is the strategy, and it can carry a store of shared terms with it and
+  reach them by address: a graph-reduction machine written as a program in the net. That
+  gives up the directness of combinators as agents, and all parallelism, and is not
+  attempted here. I recall papers on token-passing nets, by Sinot, that claim call by
+  need; neither the reviewer nor I remember how, and single-token nets are of this kind.
 
 ## What this shows
 
-1. **Call by need needs nothing added to the system.** The same typed rules give strict,
-   parallel reduction or lazy, shared reduction, depending only on which pairs are fired.
+1. **With a reducer that chooses, call by need needs nothing added.** The typed rules of
+   `ski.rules` give strict, parallel reduction or lazy, shared reduction, depending only
+   on which pairs are fired. Carried in the net, the demand needs agents of its own
+   (`lazy.rules`) and no work is shared.
 2. **It does not reproduce the reference's counts.** It does the same jobs in fewer
    contractions (323 for 340, and about a third fewer on the larger two). The reference
    counts belong to the reference reducer's own sharing.

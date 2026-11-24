@@ -274,11 +274,14 @@ def demand(n_max):
     leftmost-outermost tree reduction takes steps."""
     agents, rules = table.load(LAZY)
     memo, used = {}, {}
-    ran = wrong = skipped = 0
+    wrong, counts = 0, []
     for leaves, top in ((["S", "K", "I"], n_max), (["S", "K", "I", 0, 1], min(n_max, 5))):
+        ran = skipped = 0
+        counts.append(None)
         for n in range(1, top + 1):
             for t in terms(leaves, n, memo.setdefault(len(leaves), {})):
                 nf, steps = lo_normal_form(t)
+                counts[-1] = (ran + (nf is not None), skipped + (nf is None))
                 if nf is None:
                     skipped += 1
                     continue
@@ -297,9 +300,10 @@ def demand(n_max):
                         print("WRONG:", show(t), show(net.read()), net.counts.get("contract", 0), steps)
                     for line, k in net.used.items():
                         used[line] = used.get(line, 0) + k
-    print(f"lazy.rules, every pair fired; S, K, I to size {n_max} and with two atoms to size {min(n_max, 5)}: {ran} terms with a "
-          f"normal form ({skipped} without one within the caps, not run), each as applications, with values built directly, "
-          f"and with every subterm named: {wrong} wrong")
+    print(f"lazy.rules, every pair fired; S, K, I to size {n_max}: {counts[0][0]} terms with a normal form "
+          f"({counts[0][1]} without one within the caps, not run); with two atoms as well, to size {min(n_max, 5)}: "
+          f"{counts[1][0]} (these include the first family's terms up to that size); each as applications, with values "
+          f"built directly, and with every subterm named: {wrong} wrong")
     print("  each stops with its normal form in as many contractions as tree reduction takes steps" if not wrong else "  see above")
     unused = [r.title() for r in rules if r.line not in used]
     print("  rules never applied: " + ("; ".join(unused) if unused else "none"))

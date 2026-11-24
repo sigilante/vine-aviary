@@ -8,7 +8,13 @@ TERM is in prefix form: a backtick applies the next two terms; S, K, I; a digit 
 
 A term is "S", "K", "I", an int (an atom), a `Ref` (a reference to a named term), or a
 pair (function, argument). Named terms are given to the net as `defs` (names.py makes
-them); each must be closed and in normal form, so expanding one twice repeats no work.
+them). Each must be closed. For ski.rules each must also be in normal form, so that
+expanding one twice repeats no work and none is left unreduced when every pair is fired;
+that is checked. lazy.rules does not share work, and there any closed term may be named.
+
+With a table that has the inert application `ap` (lazy.rules), terms are built with it and
+the root is given an `nf`, a demand for the normal form: `run_all` is then the schedule to
+use, and `normalize` and `head` are not meant for it.
 
 Schedules:
 - `run_all`: every active pair, in rounds, until none is left. This is how the IVM reduces.
@@ -56,6 +62,22 @@ ARITY = {"S": 3, "K": 2, "I": 1}
 PARTIAL = {("S", 1): "S1", ("S", 2): "S2", ("K", 1): "K1"}
 
 
+def normal(term):
+    """Whether a term with references has no redex of its own: no combinator has all its
+    arguments, and no reference is applied (it might name anything)."""
+    todo = [term]
+    while todo:
+        t = todo.pop()
+        count = 0
+        while isinstance(t, tuple):
+            todo.append(t[1])
+            t = t[0]
+            count += 1
+        if count and (isinstance(t, Ref) or (isinstance(t, str) and count >= ARITY[t])):
+            return False
+    return True
+
+
 class Net:
     def __init__(self, agents=None, rules=None, defs=None, direct=False):
         if agents is None:
@@ -64,6 +86,10 @@ class Net:
         # A table with an inert application, `ap`, carries its demand in the net
         # (lazy.rules): terms are built with `ap`, and the root asks for a normal form.
         self.lazy = "ap" in agents
+        if not self.lazy:
+            for k, t in self.defs.items():
+                if not normal(t):
+                    raise ValueError(f"the term named {k} is not in normal form: with this table only normal forms may be named")
         # direct: a combinator short of arguments is built as the value it is (S a b as
         # S2(a b)), not as applications that will make that value. This saves `collect`
         # interactions and changes no contraction.

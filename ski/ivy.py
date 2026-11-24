@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """The ski: system as Ivy text, and its lowering to the IVM's own agents.
 
-    ivy.py emit TERM...        the terms as nets of the ski: system, in Ivy text
-    ivy.py lower TERM...       the same lowered to the ivm: system: a program for `ivm run`
-                               that prints each term's normal form on a line
+    ivy.py emit [--demand] TERM...     the terms as nets of the ski: system, in Ivy text
+    ivy.py lower [--demand] TERM...    the same lowered to the ivm: system: a program for
+                                       `ivm run` that prints each term's normal form on a line
+
+Without --demand the table is ski.rules; with it, lazy.rules, where an application in a
+term is the inert `ski:ap` and the demand is carried by `ski:ev` and `ski:nf`.
 
 A term is in prefix form (net.py); its arguments may nest a few thousand deep at most,
 unless its subterms are named first (names.py). Ivy is Vine's text for nets: a file is named nets, a
@@ -12,8 +15,9 @@ name used twice, and `^` is the net's free port.
 
 **ski: text.** One node for each agent of ski.rules, with its auxiliary ports as children:
 `ski:s`, `ski:k`, `ski:i`, `ski:k1(x)`, `ski:s1(x)`, `ski:s2(x y)`, `ski:atom#3`,
-`ski:stuck(h x)`, `ski:app(argument result)`, `ski:dup(p q)`, `ski:era`, and
-`ski:ref[NAME]` for a reference to the net NAME. A term's net has the term's output on its
+`ski:stuck(h x)`, `ski:app(argument result)`, `ski:dup(p q)`, `ski:era`,
+`ski:ref[NAME]` for a reference to the net NAME, and for lazy.rules `ski:ap(function
+argument)`, `ski:ev(to)` and `ski:nf(to)`. A term's net has the term's output on its
 free port.
 
 **The lowering** is agent by agent, as Vine lowers its own system to the IVM's:
@@ -24,17 +28,19 @@ free port.
 | `ski:dup` | a label-1 combinator, which copies such a node by commuting with it |
 | `ski:era` | the eraser |
 | `ski:ref[N]` | a reference to the net N: the IVM expands it at a label-0 combinator and copies it at a label-1 one, which are the table's three rules for `ref` |
-| `ski:app` | a label-0 combinator that takes the value apart, then the IVM's branch on the tag, which picks the net for that value's rule and joins it to the payload, the argument and the result |
+| `ski:app`, `ski:ev`, `ski:nf` | a label-0 combinator that takes the value apart, then the IVM's branch on the tag, which picks the net for that consumer's rule with that value and joins it to the payload and the consumer's own ports |
 
-The nets for the rules are not written here: each `app >< value` rule of ski.rules is
-lowered, right-hand side and all, by the same table of agents. Written by hand, and not
+The nets for the rules are not written here: each rule of the table for one of those
+consumers is lowered, right-hand side and all, by the same table of agents. In lazy.rules
+`ski:ap` is one more tagged value. Written by hand, and not
 derived from the rule table: how each agent is lowered (above), the order of the tags, the
 main net, and the nets that print a value. The duplication and erasure
 rules are not lowered at all: the claim, which the checks test, is that the IVM's own
 commutation and erasure do to the lowered nodes what those rules say.
 
 The IVM fires every pair, so a lowered program behaves as `run_all` does, not as reduction
-by need: a term whose dropped argument never stops never stops.
+by need. By ski.rules a term whose dropped argument never stops never stops; by lazy.rules
+it stops, but no work is shared.
 """
 import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -375,6 +381,18 @@ def lower(ski_text, agents=None, rules=None):
         agents, rules = table.load(table.default_path())
     nets = read(ski_text)
     values = tagged(agents)
+
+    def atoms(tree):
+        if not isinstance(tree, str):
+            if tree[0] == "ski:atom" and not 0 <= tree[1] <= 9:
+                raise ValueError(f"the lowered program prints atoms 0 to 9 only, not {tree[1]}")
+            for kid in tree[3]:
+                atoms(kid)
+
+    for body in nets.values():
+        for a, b in body:
+            atoms(a)
+            atoms(b)
     parts = []
     count = sum(1 for n in nets if n.startswith("ski:term:"))
     fresh = Fresh("m")

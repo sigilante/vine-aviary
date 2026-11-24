@@ -43,7 +43,8 @@ def run_ivm(program, directory):
         parts = line.split()
         if len(parts) == 2 and parts[0] in KINDS:
             stats[parts[0]] = int(parts[1].replace("_", ""))
-    return r.stdout.split("\n"), stats, "Error" in r.stderr, r.stderr
+    # A flag is reported as "Error: ..."; a crash of the IVM is a non-zero exit.
+    return r.stdout.split("\n"), stats, "Error" in r.stderr or r.returncode != 0, r.stderr
 
 
 def table_for(demand):
@@ -76,13 +77,14 @@ def main(n_max, named, demand):
             else:
                 mains.append(t)
         lines, stats, error, log = run_ivm(ivy.lower(ivy.emit(mains, defs, demand), agents, rules), directory)
-        if error:
+        if error or len(lines) < len(batch):
             wrong += len(batch)
-            print("THE IVM RAISED A FLAG:", log[:300])
-        for t, w, got in zip(batch, want, lines):
-            if got != w:
-                wrong += 1
-                print(f"WRONG on the IVM: {show(t)} gives {got!r}, not {w}")
+            print("THE IVM RAISED A FLAG, STOPPED, OR PRINTED TOO FEW LINES:", log[-300:])
+        else:
+            for t, w, got in zip(batch, want, lines):
+                if got != w:
+                    wrong += 1
+                    print(f"WRONG on the IVM: {show(t)} gives {got!r}, not {w}")
         for k in KINDS:
             theirs[k] += stats.get(k, 0)
         # The same answers lowered as they stand: nothing to reduce, only to print.
@@ -103,7 +105,7 @@ def main(n_max, named, demand):
                         continue
                 net = Net.of(t, agents, rules, direct=True)
                 try:
-                    net.run_all(50000, 100000)
+                    net.run_all(50000, 100000)   # more than check.py's caps: lazy.rules takes more interactions
                 except Stop:
                     if demand:
                         wrong += 1
@@ -156,7 +158,7 @@ def skijack_programs(which):
             want = show(convert(run_level0(marked, 3_000_000, whnf_only=False).term))
             main, defs = names.name(ours, 2, True)
             lines, stats, error, log = run_ivm(ivy.lower(ivy.emit([main], defs, True), agents, rules), directory)
-            ok = lines[0] == want and not error
+            ok = bool(lines) and lines[0] == want and not error
             bad |= not ok
             print(f"{name} on the IVM, applied to {len(p.result_type.ctors)} atoms: {lines[0][:60]}; "
                   f"{'equal to' if ok else 'DIFFERENT FROM'} the reference's normal form; "

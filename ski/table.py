@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reads an interaction system written as a table (ski.rules) and checks it.
 
-    table.py [FILE]        (default: ski.rules beside this script)
+    table.py [FILE]        (default: ski.rules beside this script; also lazy.rules)
 
 A value is an agent whose principal port is an output (+); a consumer is one whose
 principal port is an input (-). Checks:
