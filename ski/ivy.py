@@ -44,8 +44,8 @@ it stops, but no work is shared.
 """
 import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from inets.system import Expand
-from machine import system, Ref, parse as parse_term, ARITY, PARTIAL
+from machine import system, Ref, parse as parse_term, ARITY, PARTIAL  # first: it checks the inets version
+from inets import Expand, Ext, New
 
 # The values that are lowered to a tagged node; the order is the tag. `ap`, an application
 # not yet asked for, is one of them in a table that has it (lazy.rules).
@@ -278,10 +278,10 @@ def rule_equations(rule, agents):
     wires = {}
 
     def end(e):
-        if e[0] == "ext":
-            return e[1]
-        assert e[0] == "new", f"{rule}: a rule that keeps a node of its pair is not lowered"
-        _, i, j = e
+        if isinstance(e, Ext):
+            return e.letter
+        assert isinstance(e, New), f"{rule}: a rule that keeps a node of its pair is not lowered"
+        i, j = e.node, e.port
         if j == 0:
             return trees[i]
         return wires.setdefault((i, j), f"n{i}p{j}")

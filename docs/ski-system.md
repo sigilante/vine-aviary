@@ -202,7 +202,7 @@ machine gives, with no error flag; the same again with their normal subterms nam
 
 Starting each term and printing its answer cost the IVM another 1,945,110, measured by
 running the answers alone and taken off; the two runs differ only in the reduction, but
-that the difference is exactly the reduction has not been checked by hand. An application rule costs the IVM one extrinsic
+we have not checked by hand that the difference is exactly the reduction. An application rule costs the IVM one extrinsic
 call (the branch) and one expansion of a net: 66,255 of each, the number of contractions
 and arguments taken together.
 
@@ -287,8 +287,9 @@ that is evaluated on the first demand from either of two holders.
   thing, the token is the strategy, and it can carry a store of shared terms with it and
   reach them by address: a graph-reduction machine written as a program in the net. That
   gives up the directness of combinators as agents, and all parallelism. It is
-  `skivine/graph.vi`, described in `graph-machine.md`, and it runs t1 and t2. I recall papers on token-passing nets, by Sinot, that claim call by
-  need; neither the reviewer nor I remember how, and single-token nets are of this kind.
+  `skivine/graph.vi`, described in `graph-machine.md`, and it runs t1 and t2. Sinot has written on call by need in
+  token-passing nets, which are single-token nets of this kind; we have not checked how
+  his construction gets it.
 
 ## What this shows
 
@@ -297,8 +298,8 @@ that is evaluated on the first demand from either of two holders.
    on which pairs are fired. Carried in the net, the demand needs agents of its own
    (`lazy.rules`) and no work is shared.
 2. **It does not reproduce the reference's counts.** It does the same jobs in fewer
-   contractions (323 for 340, and about a third fewer on the larger two). The reference
-   counts belong to the reference reducer's own sharing.
+   contractions (323 for 340, and about a third fewer on the larger two). Its counts are
+   a property of that reducer, not of the calculus; we have not found why they are higher.
 3. **Copying is the cost.** There are 8, 32 and 99 copies for each contraction in t0, t1
    and t2, and the net holds up to 8.6 million nodes, where SKIjack's runtime design note
    (`RUNTIME-DESIGN.md` in its repository) says the tower's intermediate states are a few

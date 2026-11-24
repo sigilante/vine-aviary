@@ -18,7 +18,7 @@ agent ref   +  param k     # a reference to the term named k, which is closed an
 
 # Consumers: the principal port is an input, and waits for a value.
 agent app   - - +          # application: (function) (argument result)
-agent dup   - + +          # duplicator: (term) (copy copy)
+agent dup   - + + duplicator   # (term) (copy copy)
 agent era   -              # eraser: (term)
 
 # rule CONSUMER >< VALUE

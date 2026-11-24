@@ -30,7 +30,7 @@ agent ap    + - -
 agent ev    - +            # a demand: (term) (where its value is to go)
 agent nf    - +            # a demand for the whole normal form, not just a value
 agent app   - - +          # an application under demand: (function) (argument result)
-agent dup   - + +
+agent dup   - + + duplicator
 agent era   -
 
 # --- a demand meets a term ----------------------------------------------------------------

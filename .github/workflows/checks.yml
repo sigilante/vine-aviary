@@ -1,0 +1,32 @@
+name: checks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# The checks of ski/ that need only Python and inets. Not run here: skijack_check.py (it
+# needs the skijack and aviary_kernel packages), ivm_check.py (an ivm binary) and the Vine
+# programs in bench/ and skivine/ (the Vine compiler).
+jobs:
+  ski:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - name: The tables are complete and typed
+        run: inets check ski/ski.rules && inets check ski/lazy.rules
+      - name: The census to size 6, both tables, and the copies bundled with inets
+        run: python ski/check.py all
+      - name: Ivy output, emitted and lowered
+        run: |
+          python ski/ivy.py emit '```SKK0' '``KI```SII``SII' > /dev/null
+          python ski/ivy.py lower '```SKK0' '``KI```SII``SII' > /dev/null
+          python ski/ivy.py lower --demand '```SKK0' '``KI```SII``SII' > /dev/null

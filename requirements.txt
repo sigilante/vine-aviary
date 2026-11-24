@@ -1,0 +1,3 @@
+# The Python checks of ski/ (see ski/README.md). The machine is inets; 0.1.3 is the first
+# release whose tables declare `dup` a duplicator, which ski/machine.py relies on.
+inets>=0.1.3,<0.2

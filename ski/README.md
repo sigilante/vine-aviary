@@ -6,14 +6,13 @@ that turns the table into a program for the [IVM](https://github.com/VineLang/vi
 checks against tree reduction, against the IVM, and against programs compiled by
 [SKIjack](https://github.com/sigilante/SKIjack).
 
-It is an experiment which explores the interaction of the $S$, $K$ and $I$ combinators as 
-an interaction net and within the Vine virtual machine. Everything here is tested, on the 
+It is an experiment. Everything here is tested, on the
 terms and programs named below; nothing is proved by machine. The full account, with every 
 figure and how it was got, is [`docs/ski-system.md`](../docs/ski-system.md).
 
 An *interaction net* is a graph whose nodes, called agents, rewrite in pairs by a fixed
-table of rules. The main finding is that one term, $K\,I\,\Omega$, stops or runs without
-end depending on which pairs the machine fires. With the combinators as agents, a machine
+table of rules. The main finding is that one term, $K\,I\,\Omega$ (where $\Omega$ reduces to
+itself without end), stops or runs without end depending on which pairs the machine fires. With the combinators as agents, a machine
 that fires every pair, as the IVM does, can be made to stop only by giving up shared work.
 
 ## Try it
@@ -22,11 +21,11 @@ The machine is the [`inets`](https://github.com/sigilante/inets) package, which 
 of the code that was first written here; it needs Python 3.10 or later:
 
 ```sh
-pip install 'inets>=0.1.2'
+pip install 'inets>=0.1.3'
 ```
 
-`inets` comes with the two tables of this directory, rule for rule (`ski/check.py table`
-confirms it), so its `inets run ski` runs this system. A term is written in prefix form: a
+`inets` ships copies of the two tables in this directory, identical rule for rule
+(`ski/check.py table` confirms it), so `inets run ski` runs this system. A term is written in prefix form: a
 backtick applies the next term to the one after it; `S`, `K` and `I` stand for
 themselves; a digit is an atom, a constant that does nothing. $\Omega$ below is
 ```` ```SII``SII ````, which reduces to itself without end.
@@ -152,7 +151,7 @@ such as N32, a 32-bit number.
 | `dup` | a label-1 combinator |
 | `era` | the eraser |
 | `ref` | a reference to a net |
-| `app`, `ev`, `nf` | a label-0 combinator that takes the value apart, and the IVM's branch on the tag, which picks the net for that rule |
+| `app`, `ev`, `nf` (an application, a demand for a value, a demand for the whole normal form) | a label-0 combinator that takes the value apart, and the IVM's branch on the tag, which picks the net for that rule |
 
 ```sh
 $ python3 ski/ivy.py emit '```SKK0'
@@ -182,15 +181,15 @@ by tree reduction within the scripts' caps. `check.py` calls the exhaustive test
 term up to a size a census.
 
 - **By need gives the right normal form on every term tried**: all 322,998 up to size 7.
-  Fired all at once, 13 of those never stop.
+  With every pair fired at once, 13 of those never stop.
 - **By need never takes more contractions than SKIjack's reference reducer** on any term
   tried, and takes fewer on some. We have not found why the reference takes more.
 - **`lazy.rules` stops on every one** with every pair fired, each in exactly as many
   contractions as tree reduction takes steps.
 - **On the IVM, both tables give the right normal form** on all 47,155 terms of $S$, $K$,
   $I$ and two atoms up to size 5, with and without names. For reduction alone, the IVM
-  spends 4.9 interactions for each of the table machine's by `ski.rules` and 2.3 by
-  `lazy.rules` (5.4 and 2.5 with names).
+  spends 4.9 interactions for each one the table machine spends on `ski.rules`, and 2.3
+  on `lazy.rules` (5.4 and 2.5 with names).
 
 **Why a net copies.** A graph reducer lets many applications share one partial
 application. A net cannot, because an application consumes the node it meets, so a value
@@ -210,9 +209,9 @@ Each is reduced here until its head is a value.
 | `lazy.rules`, all at once: contractions | 340 | does not finish | not tried |
 | `lazy.rules` on the IVM: IVM interactions | 60,797 | not tried | not tried |
 
-Each answer that was reached equals the reference's. The t2 figures, the 340 for
-`lazy.rules` on t0, the "does not stop" and the "does not finish" are from runs made by
-hand, which the kept scripts do not repeat; `docs/ski-system.md` says which. Naming cuts
+Each answer that was reached equals the reference's. Some entries come from runs made by
+hand that the kept scripts do not repeat: the t2 figures, the 340 for `lazy.rules` on t0,
+and the "does not stop" and "does not finish" entries; `docs/ski-system.md` says which. Naming cuts
 the copying to between a quarter and a half, and changes no contraction count.
 
 ## Files
@@ -279,9 +278,9 @@ Each script's opening lines say what it compares.
 and $I$ by graph reduction, written in Vine as an ordinary program: the term is a graph in
 an array, nodes name their parts by position, and a reduced application is overwritten in
 place. That is a net that is its own reducer. It runs t1 and t2 on the IVM with shared
-work, at about 3,000 IVM interactions for each contraction, in the contractions of
-reduction by need: 63,520 on t1, which a script checks, and 314,309 on t2, where the
-figure to match is from a run by hand. See
+work, at about 3,000 IVM interactions for each contraction. It makes the same
+contractions as reduction by need: 63,520 on t1 (a script checks this) and 314,309 on t2
+(the figure to match comes from a run by hand). See
 [`docs/graph-machine.md`](../docs/graph-machine.md).
 
 Set beside the table above, it shows what the agents cost and what they would save. By

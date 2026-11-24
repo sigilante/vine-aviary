@@ -8,7 +8,7 @@ State: an experiment. The results are tests, not proofs.
 
 | Path | Holds |
 |---|---|
-| `skivine/ski.vi` | S, K, I by hand: `Term` (a combinator that still lacks arguments), `apply`, a reader and printer |
+| `skivine/ski.vi` | S, K, I written directly, not generated: `Term` (a combinator that still lacks arguments), `apply`, a reader and printer |
 | `skivine/lazy.vi` | S, K, I, Y by normal-order evaluation: terminates whenever a normal form exists, without sharing |
 | `skivine/graph.vi`, `docs/graph-machine.md` | S, K, I by graph reduction with a store: call by need as a program. Runs SKIjack's tower programs on the IVM |
 | `skivine/combinators.vi` | 49 birds, generated: the same design for every bird in `tools/birds.py` except Y |
@@ -41,8 +41,8 @@ python3 tools/gen_combinators.py  # regenerate skivine/combinators.vi
 echo '```B S K I' | vine run bench/birds.vi --lib skivine --no-stats
 ```
 
-The `ski:` system's checks need Python 3.10 or later and the `inets` package (`pip install
-'inets>=0.1.2'`), which is the machine; `skijack_check.py` also needs the `skijack` and
+The `ski:` system's checks need Python 3.10 or later and the `inets` package, the reducer that
+runs the system (`pip install 'inets>=0.1.3'`); `skijack_check.py` also needs the `skijack` and
 `aviary_kernel` packages, and `ivm_check.py` an `ivm` binary:
 
 ```sh
@@ -56,7 +56,8 @@ IVM=/path/to/ivm python3 ski/ivm_check.py --skijack t0   # a SKIjack program on 
 
 Terms are in prefix form: a backtick applies the next two terms. `ski.vi` reads the
 single-character names `S`, `K`, `I` written together; `combinators.vi` reads bird names
-separated by spaces. Run `ref/extra.py` only under a memory cap.
+separated by spaces. Run `ref/extra.py` (terms with large normal forms, and terms without one) only under a
+memory cap: its nets grow to millions of nodes.
 
 ## The IVM is strict
 
