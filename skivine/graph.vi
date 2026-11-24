@@ -1,0 +1,200 @@
+/// S, K and I by graph reduction with a store: call by need, as a program.
+///
+/// The term is a graph held in an array (`Array[Node]`), and a node names its parts by
+/// their places in the array. A place can be named any number of times, so sharing a
+/// term costs nothing: `S x y z` makes `x z` and `y z` with the same `z`. When a shared
+/// application is reduced its place is overwritten with the result (or with a pointer to
+/// it), so whoever else names that place finds the work done. This is what the rule
+/// tables in `ski/` cannot do with every pair fired: there is one cursor here, and it
+/// carries the store with it.
+///
+/// Reduction is normal order: `whnf` walks down the spine of applications from a term,
+/// keeping their places on a stack, and contracts the head whenever it has all its
+/// arguments.
+
+use #root::data::Array;
+
+/// `Atom` is an inert constant with a number. `App` is an application, holding the places
+/// of the function and the argument. `Ind` says "look there instead": it is what a
+/// contracted `I x` or `K x y` becomes.
+pub enum* Node {
+  S(),
+  K(),
+  I(),
+  Atom(N32),
+  App(N32, N32),
+  Ind(N32),
+}
+
+/// The store, and the number of contractions made in it.
+pub struct* Graph(Array[Node], N32);
+
+pub mod Graph {
+  /// A store holding S, K and I at places 0, 1 and 2.
+  pub fn new() -> Graph {
+    Graph([Node::S(), Node::K(), Node::I()] as Array, 0)
+  }
+
+  /// The number of places in use.
+  pub fn .size(&Graph(nodes, _): &Graph) -> N32 {
+    nodes.len()
+  }
+
+  /// The number of contractions made so far.
+  pub fn .contractions(&Graph(_, count): &Graph) -> N32 {
+    count
+  }
+
+  fn .tick(&Graph(_, count): &Graph) {
+    count += 1;
+  }
+
+  fn .put(&Graph(nodes, _): &Graph, node: Node) -> N32 {
+    let at = nodes.len();
+    nodes.push_back(node);
+    at
+  }
+
+  fn .node(&Graph(nodes, _): &Graph, at: N32) -> Node {
+    nodes.get(at).or_use(Node::I())
+  }
+
+  fn .set(&Graph(nodes, _): &Graph, at: N32, node: Node) {
+    nodes.at(at).assume().* = node;
+  }
+
+  /// The argument of the application at a place.
+  fn .argument(&self: &Graph, at: N32) -> N32 {
+    match self.node(at) {
+      Node::App(_, x) { x }
+      _ { at }
+    }
+  }
+
+  /// Reads a term in prefix form into the store and returns its place: a backtick
+  /// applies the next two terms; `S`, `K`, `I`; a digit is an atom.
+  pub fn .parse(&self: &Graph, &chars: &List[Char]) -> N32 {
+    let c = chars.pop_front().or_use('I');
+    when {
+      c == '`' {
+        let f = self.parse(&chars);
+        let x = self.parse(&chars);
+        self.put(Node::App(f, x))
+      }
+      c == 'S' { 0 }
+      c == 'K' { 1 }
+      c == 'I' { 2 }
+      _ { self.put(Node::Atom((c as N32) - 48)) }
+    }
+  }
+
+  /// Reduces the term at `root` until its head is a combinator short of arguments, or an
+  /// atom. The place `root` then holds that term (perhaps through pointers).
+  pub fn .whnf(&self: &Graph, root: N32) {
+    // The applications on the spine, the innermost first.
+    let spine = [];
+    let depth = 0;
+    let at = root;
+    let going = true;
+    while going {
+      match self.node(at) {
+        Node::App(f, _) {
+          spine.push_front(at);
+          depth += 1;
+          at = f;
+        }
+        Node::Ind(to) {
+          at = to;
+        }
+        Node::Atom(_) {
+          going = false;
+        }
+        Node::I() {
+          if depth >= 1 {
+            let a = spine.pop_front().or_use(0);
+            depth -= 1;
+            let x = self.argument(a);
+            self.set(a, Node::Ind(x));
+            self.tick();
+            at = x;
+          } else {
+            going = false;
+          }
+        }
+        Node::K() {
+          if depth >= 2 {
+            let a = spine.pop_front().or_use(0);
+            let b = spine.pop_front().or_use(0);
+            depth -= 2;
+            let x = self.argument(a);
+            self.set(b, Node::Ind(x));
+            self.tick();
+            at = x;
+          } else {
+            going = false;
+          }
+        }
+        Node::S() {
+          if depth >= 3 {
+            let a = spine.pop_front().or_use(0);
+            let b = spine.pop_front().or_use(0);
+            let c = spine.pop_front().or_use(0);
+            depth -= 3;
+            let x = self.argument(a);
+            let y = self.argument(b);
+            let z = self.argument(c);
+            let left = self.put(Node::App(x, z));
+            let right = self.put(Node::App(y, z));
+            self.set(c, Node::App(left, right));
+            self.tick();
+            at = c;
+          } else {
+            going = false;
+          }
+        }
+      }
+    }
+  }
+
+  /// Prints the normal form of the term at a place, in prefix form: its head is reduced,
+  /// then each argument in turn. Sharing is not kept in what is printed.
+  pub fn .print(&self: &Graph, root: N32, &io: &IO) {
+    self.whnf(root);
+    let arguments = [];
+    let at = root;
+    let head = '?';
+    let going = true;
+    while going {
+      match self.node(at) {
+        Node::App(f, x) {
+          arguments.push_front(x);
+          io.print_char('`');
+          at = f;
+        }
+        Node::Ind(to) {
+          at = to;
+        }
+        Node::S() {
+          head = 'S';
+          going = false;
+        }
+        Node::K() {
+          head = 'K';
+          going = false;
+        }
+        Node::I() {
+          head = 'I';
+          going = false;
+        }
+        Node::Atom(k) {
+          head = (k + 48) as Char;
+          going = false;
+        }
+      }
+    }
+    io.print_char(head);
+    for x in arguments {
+      self.print(x, &io);
+    }
+  }
+}

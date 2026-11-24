@@ -259,8 +259,8 @@ that is evaluated on the first demand from either of two holders.
 - *A net that is its own reducer* is not ruled out. If a single token is the only active
   thing, the token is the strategy, and it can carry a store of shared terms with it and
   reach them by address: a graph-reduction machine written as a program in the net. That
-  gives up the directness of combinators as agents, and all parallelism, and is not
-  attempted here. I recall papers on token-passing nets, by Sinot, that claim call by
+  gives up the directness of combinators as agents, and all parallelism. It is
+  `skivine/graph.vi`, described in `graph-machine.md`, and it runs t1 and t2. I recall papers on token-passing nets, by Sinot, that claim call by
   need; neither the reviewer nor I remember how, and single-token nets are of this kind.
 
 ## What this shows

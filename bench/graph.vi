@@ -1,0 +1,24 @@
+
+use #skivine::graph::Graph;
+
+/// Reads one term per line (prefix form; a digit is an atom) and reduces it by graph
+/// reduction with a store. For each line it prints the normal form, then a line
+/// `contractions N places M`. A line that begins with `!` is only reduced until its head
+/// is a value, and only the second line is printed.
+pub fn main(&io: &IO) {
+  while io.read_line() is Option::Some(line) {
+    let chars = line as List[Char];
+    let graph = Graph::new();
+    let head_only = chars.at(0) is Some(&c) and c == '!';
+    if head_only {
+      chars.pop_front();
+      let root = graph.parse(&chars);
+      graph.whnf(root);
+    } else {
+      let root = graph.parse(&chars);
+      graph.print(root, &io);
+      io.print_char('\n');
+    }
+    io.println("contractions {graph.contractions()} places {graph.size()}");
+  }
+}

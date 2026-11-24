@@ -10,6 +10,7 @@ State: an experiment. The results are tests, not proofs.
 |---|---|
 | `skivine/ski.vi` | S, K, I by hand: `Term` (a combinator that still lacks arguments), `apply`, a reader and printer |
 | `skivine/lazy.vi` | S, K, I, Y by normal-order evaluation: terminates whenever a normal form exists, without sharing |
+| `skivine/graph.vi`, `docs/graph-machine.md` | S, K, I by graph reduction with a store: call by need as a program. Runs SKIjack's tower programs on the IVM |
 | `skivine/combinators.vi` | 49 birds, generated: the same design for every bird in `tools/birds.py` except Y |
 | `tools/birds.py` | The bird table (name, arity, rule), transcribed from the Aviary kernel |
 | `tools/gen_combinators.py` | Writes `combinators.vi` from the table |
@@ -34,6 +35,8 @@ python3 ref/check.py birds 3      # all 49 birds; about 6 min
 python3 ref/check.py rules        # every rule fired once
 python3 ref/check.py lazy 5       # normal order, with Y; about 1 min
 python3 ref/check.py monsters
+IVM=/path/to/ivm python3 ref/graph_check.py census 6        # the graph reducer; about 15 s
+IVM=/path/to/ivm python3 ref/graph_check.py skijack t0 t1   # needs skijack and aviary_kernel; t2 takes some minutes
 python3 tools/gen_combinators.py  # regenerate skivine/combinators.vi
 echo '```B S K I' | vine run bench/birds.vi --lib skivine --no-stats
 ```
