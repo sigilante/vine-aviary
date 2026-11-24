@@ -29,8 +29,8 @@ line, counts included:
 The package needed one addition, `collapse`, which removes a duplicator that has lost a
 copy. Without it, the copies by need on t1 are 23,475,006, not 2,030,766. Not rerun: t2,
 and the figures this note marks as runs by hand. The censuses take about twice as long as
-before, and t1 by need about three times as long (41 s against 15 s), because the package
-is a general machine.
+before, and t1 by need about four times as long (40 s against 11 s, timed one after the
+other on 2026-11-25), because the package is a general machine.
 
 | File | Holds |
 |---|---|

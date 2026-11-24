@@ -14,13 +14,14 @@ has lost one of its copies is removed and its input joined to the copy that is l
 (`collapse` in `inets.Net.sweep`). Contractions do not depend on that; copies do.
 """
 import os
+import re
 from dataclasses import dataclass
 
 import inets
 from inets import ski
 from inets.errors import TermError
 
-if tuple(int(x) for x in inets.__version__.split(".")[:3]) < (0, 1, 2):
+if tuple(int(re.match(r"\d*", x).group() or 0) for x in inets.__version__.split(".")[:3]) < (0, 1, 2):
     raise ImportError(f"ski/machine.py needs inets 0.1.2 or later (for duplicator collapse); "
                       f"this is inets {inets.__version__}: pip install 'inets>=0.1.2'")
 from inets.ski import Ref, parse, show, unfold, is_normal, name_subterms, ARITY, PARTIAL  # noqa: F401

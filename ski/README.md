@@ -259,10 +259,11 @@ Each script's opening lines say what it compares.
 - The evidence is tests, on small terms and three programs. There is no simulation theorem;
   the typing argument and the argument about sharing are on paper.
 - The machine (`inets`) is a general reference implementation in Python, not a tool. On
-  t1 it is about three times slower than the machine written for this table that it
-  replaced (41 s against 15 s for one run by need, both timed on one machine on
-  2026-11-25). t2 took about six and a half minutes and several GB of memory on the old
-  machine and has not been run with `inets`; expect twenty minutes or more.
+  t1 it is about four times slower than the machine written for this table that it
+  replaced (40 s against 11 s for one run by need, timed one after the other on one
+  machine on 2026-11-25). t2 took about six and a half minutes and several GB of memory on
+  the old machine and has not been run with `inets`; at the same ratio it would take
+  about half an hour, a guess that has not been measured.
 - By need never fires an eraser, so the machine sweeps away what the root cannot reach.
   That is housekeeping, not a rule. It changes the count of copies, never the count of
   contractions or the answer.
